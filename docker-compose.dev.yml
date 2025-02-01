@@ -1,0 +1,31 @@
+
+services:
+  db:
+    container_name: db
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+
+  api:
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/postgres
+    command: >
+      sh -c "
+        pnpm db:migrate &&
+        npx nodemon -w /app/migrations -e sql -x 'pnpm db:migrate' & 
+        pnpm dev
+      "
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
