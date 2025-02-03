@@ -4,16 +4,48 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy # Wait for MySQL to be fully ready
     ports:
       - "4000:4000"
+    env_file: .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/healthcheck"]
-      interval: 1m30s
-      timeout: 30s
+      interval: 30s
+      timeout: 10s
       retries: 5
       start_period: 30s
+
+  db:
+    container_name: db
+    image: mysql:8.4.4
+    ports:
+      - "3307:3306"
     volumes:
-      - ./session-keys:/app/session-keys
+      - mysql_data:/var/lib/mysql
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DATABASE_NAME}
+      - MYSQL_USER=${DATABASE_USERNAME}
+      - MYSQL_PASSWORD=${DATABASE_PASSWORD}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "${DATABASE_USERNAME}",
+          "--password=${DATABASE_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   dozzle:
     container_name: dozzle
@@ -22,15 +54,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - 8080:8080
-  
+
   prometheus:
     image: prom/prometheus
     container_name: prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - "--config.file=/etc/prometheus/prometheus.yml"
     ports:
       - 9090:9090
-    restart: unless-stopped
     volumes:
       - ./prometheus:/etc/prometheus
       - prom_data:/prometheus
@@ -38,9 +69,8 @@ services:
   grafana:
     image: grafana/grafana
     container_name: grafana
-    ports:  
+    ports:
       - 3000:3000
-    restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=password
@@ -52,3 +82,4 @@ services:
 volumes:
   prom_data:
   grafana-storage:
+  mysql_data:
