@@ -1,0 +1,32 @@
+# Ignore node_modules directory
+node_modules
+
+# Ignore log files
+*.log
+
+# Ignore build directories
+dist
+build
+
+# Ignore environment variable files
+.env
+.env.local
+
+# Ignore Docker files
+Dockerfile
+docker-compose.yml
+
+# Ignore temporary files
+*.tmp
+*.swp
+
+# Ignore coverage reports
+coverage
+
+# Ignore IDE specific files
+.vscode
+.idea
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db

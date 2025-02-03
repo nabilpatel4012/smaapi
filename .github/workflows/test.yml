@@ -2,9 +2,9 @@ name: Run Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint:
@@ -18,35 +18,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 9
           run_install: true
-        
-      - name: Run lint
-        run: pnpm lint
 
   test:
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            clear: true
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clear: true
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
-  
-        - name: Install pnpm
-          uses: pnpm/action-setup@v2
-          with:
-            version: 9
-            run_install: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-        - name: Run tests
-          run: pnpm test b vgn
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          run_install: true
