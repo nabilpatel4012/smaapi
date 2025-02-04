@@ -179,6 +179,7 @@ export const errorResponseSchema = {
   type: "object",
   properties: {
     statusCode: { type: "number" },
+    smaapi_code: { type: "number" },
     message: { type: "string" },
     error: { type: "string" },
     cause: { type: "string" },
@@ -191,6 +192,14 @@ export const userUpdateSchema = {
     username: { type: "string", minLength: 3, maxLength: 100 },
     email: { type: "string", format: "email" },
     password: { type: "string", minLength: 8 },
+    user_type: { type: "string", enum: ["individual", "business"] }, // New field for user type
+    company_name: { type: "string", maxLength: 200 }, // Optional for business users
+    company_email: { type: "string", format: "email" }, // Optional for business users
+    first_name: { type: "string", maxLength: 100 }, // Optional
+    last_name: { type: "string", maxLength: 100 }, // Optional
+    phone_number: { type: "string", maxLength: 20 }, // Optional
+    avatar_url: { type: "string", format: "uri" }, // Optional, ensures it's a valid URL
+    bio: { type: "string" }, // Optional
   },
 } as const;
 

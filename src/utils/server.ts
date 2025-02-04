@@ -171,7 +171,7 @@ class Application {
     await registerCors(this.server);
     await registerSwagger(this.server);
     await registerMetrics(this.server);
-    this.server.register(auth);
+    await this.server.register(auth);
   }
 
   async registerRoutes() {

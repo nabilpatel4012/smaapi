@@ -26,7 +26,6 @@ export async function ping() {
     await db.executeQuery(query);
     console.log("DB CONNECTION SUCCESS");
   } catch (error) {
-    logger.info(config);
     console.error("DB CONNECTION FAILED:", error);
     process.exit(1);
   }

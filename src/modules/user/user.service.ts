@@ -10,7 +10,7 @@ import { IUserReply } from "../../common/types/user.types";
  * Create a new user (Register)
  */
 export async function createUser(
-  values: Insertable<UsersTable>,
+  values: Insertable<UsersTable>
 ): Promise<IUserReply> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
@@ -63,7 +63,21 @@ export async function getUserById(userId: number) {
     const result = await db
       .selectFrom("users")
       .where("user_id", "=", userId)
-      .select(["user_id", "username", "email", "created_at"])
+      .select([
+        "user_id",
+        "username",
+        "email",
+        "bio",
+        "is_active",
+        "is_verified",
+        "user_type",
+        "first_name",
+        "last_name",
+        "phone_number",
+        "plan_type",
+        "plan_expires_at",
+        "created_at",
+      ])
       .execute();
 
     end({ operation: "get_user_by_id", success: "true" });
@@ -110,7 +124,7 @@ export async function findUserByEmail({ email }: { email: string }): Promise<{
  */
 export async function updateUser(
   userId: number,
-  values: Updateable<UsersTable>,
+  values: Updateable<UsersTable>
 ) {
   const end = databaseQueryTimeHistogram.startTimer();
   try {

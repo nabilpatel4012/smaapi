@@ -20,7 +20,6 @@ export interface IUserUpdateBody {
   user_type?: "individual" | "business"; // New field for user type
   company_name?: string; // Optional for business users
   company_email?: string; // Optional for business users
-  plan_type?: string | "SMAAPI_FREE" | "SMAAPI_PRO" | "SMAAPI_ENTERPRISE"; // Optional, defaults to SMAAPI_FREE
   first_name?: string; // Optional
   last_name?: string; // Optional
   phone_number?: string; // Optional
