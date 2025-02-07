@@ -25,11 +25,12 @@ const authPlugin: FastifyPluginCallback = (server, undefined, done) => {
     "authenticate",
     async (req: FastifyRequest, reply: FastifyReply) => {
       try {
+        // TODO: Add cache invalidation here for access token
         await req.jwtVerify();
       } catch (error) {
         reply.send(error);
       }
-    },
+    }
   );
 
   done();

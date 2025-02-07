@@ -16,17 +16,26 @@ export async function registerSwagger(server: FastifyInstance) {
       ],
       components: {
         securitySchemes: {
-          cookieAuth: {
-            type: "apiKey",
-            name: "session",
-            in: "cookie",
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT", // Optional: Specifies the token format
           },
         },
       },
+      security: [
+        { bearerAuth: [] }, // Make bearer auth global (can be overridden per route)
+      ],
     },
   });
 
-  await server.register(fastifySwaggerUi, { routePrefix: "/docs" });
+  await server.register(fastifySwaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: {
+      docExpansion: "list",
+      persistAuthorization: true, // Persist the authorization between page refreshes
+    },
+  });
 
   server.get("/docs.json", async () => server.swagger());
 }

@@ -1,36 +1,73 @@
 version: "3.9"
 
 services:
+  # db:
+  #   container_name: db
+  #   image: mysql:8.4.4
+  #   ports:
+  #     - "3307:3306"
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+  #     - MYSQL_DATABASE=${DATABASE_NAME}
+  #     - MYSQL_USER=${DATABASE_USERNAME}
+  #     - MYSQL_PASSWORD=${DATABASE_PASSWORD}
   db:
     container_name: db
-    image: mysql:8.4.4
+    image: postgres:16-alpine
     ports:
-      - "3307:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
-    environment: # These are ONLY for the MySQL container setup
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${DATABASE_NAME}
-      - MYSQL_USER=${DATABASE_USERNAME}
-      - MYSQL_PASSWORD=${DATABASE_PASSWORD}
+    environment:
+      - POSTGRES_USER=${DATABASE_USERNAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # api:
-  #   build: .
-  #   ports:
-  #     - "${PORT}:${PORT}"
-  #   volumes:
-  #     - .:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     - db
-  #   command: >
-  #     sh -c "
-  #       pnpm db:migrate &&
-  #       npx nodemon -w /app/migrations -e sql -x 'pnpm db:migrate' &
-  #       pnpm dev
-  #     "
+  valkey:
+    image: docker.io/valkey/valkey:8.0-alpine
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      - ALLOW_EMPTY_PASSWORD=yes
+      - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - "6379:6379"
+    volumes:
+      - "valkey_data:/data"
+
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_data:/data/db
+    env_file:
+      - .env
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
+    command: ["mongod", "--auth"] # Enforce authentication
 
 volumes:
-  mysql_data:
+  postgres_data:
+  valkey_data:
+    driver: local
+  mongo_data:
+    driver: local
+
+networks:
+  mongo_network:
+    driver: bridge

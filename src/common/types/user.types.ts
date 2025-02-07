@@ -47,11 +47,18 @@ export interface IUserReply {
   last_login_at?: string | null;
 }
 
+export interface IUserLoginBody {
+  // username: string;
+  email: string;
+  password: string;
+}
+
 export interface ILoginReply {
   user_id: number;
   username: string;
   email: string;
-  token: string;
+  access_token: string;
+  refresh_token: string;
 }
 
 export interface IChangePasswordBody {

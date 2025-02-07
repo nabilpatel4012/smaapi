@@ -15,6 +15,9 @@ export interface Database {
   api_middleware: ApiMiddlewareTable;
   api_endpoints: ApiEndpointsTable;
   api_keys: ApiKeysTable;
+  user_roles: UserRolesTable;
+  projects: ProjectsTable;
+  project_members: ProjectMembersTable;
 }
 
 export interface UsersTable {
@@ -45,9 +48,9 @@ export type UserUpdate = Updateable<UsersTable>;
 export interface SessionsTable {
   session_id: Generated<number>;
   user_id: number;
-  auth_token: string;
   refresh_token: string;
   ip_address: string;
+  is_valid: boolean;
   user_agent: string | null;
   login_time: ColumnType<Date, string | undefined, never>;
   expires_at: ColumnType<Date, string | undefined, never>;
@@ -56,6 +59,41 @@ export interface SessionsTable {
 export type Session = Selectable<SessionsTable>;
 export type NewSession = Insertable<SessionsTable>;
 export type SessionUpdate = Updateable<SessionsTable>;
+
+export interface UserRolesTable {
+  role_id: Generated<number>;
+  role_name: string;
+  role_description: string | null;
+}
+
+export type UserRole = Selectable<UserRolesTable>;
+export type NewUserRole = Insertable<UserRolesTable>;
+export type UserRoleUpdate = Updateable<UserRolesTable>;
+
+export interface ProjectsTable {
+  project_id: Generated<number>;
+  user_id: number;
+  project_name: string;
+  project_description: string | null;
+  tags: ColumnType<object | null, object | undefined, never>; // JSON array of tags
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export type Project = Selectable<ProjectsTable>;
+export type NewProject = Insertable<ProjectsTable>;
+export type ProjectUpdate = Updateable<ProjectsTable>;
+
+export interface ProjectMembersTable {
+  project_member_id: Generated<number>;
+  project_id: number;
+  user_id: number;
+  role_id: number | null; // Can be null if role is removed
+  added_at: ColumnType<Date, string | undefined, never>;
+}
+
+export type ProjectMember = Selectable<ProjectMembersTable>;
+export type NewProjectMember = Insertable<ProjectMembersTable>;
+export type ProjectMemberUpdate = Updateable<ProjectMembersTable>;
 
 export interface ApisTable {
   api_id: Generated<number>;

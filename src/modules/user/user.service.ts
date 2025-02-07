@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { Insertable, Updateable } from "kysely"; // Import Kysely types
+import { Insertable, sql, Updateable } from "kysely"; // Import Kysely types
 import { db } from "../../db/db"; // Your Kysely instance
 import { UsersTable } from "../../db/kysley.schema"; // Import the Kysely table interface
 import { databaseQueryTimeHistogram } from "../../utils/metrics";
@@ -25,28 +25,27 @@ export async function createUser(
     const result = await db
       .insertInto("users")
       .values(payload)
-      .executeTakeFirst();
-    end({ operation: "create_user", success: "true" });
-
-    const insertedID = Number(result.insertId!);
-    return db
-      .selectFrom("users")
-      .select([
+      .returning([
         "user_id",
         "username",
         "email",
         "user_type",
+        "company_name",
+        "company_email",
+        "plan_type",
+        "plan_expires_at",
         "first_name",
         "last_name",
         "phone_number",
-        "is_verified",
-        "is_active",
+        "avatar_url",
+        "bio",
         "created_at",
-        "plan_type",
-        "plan_expires_at",
+        "is_active",
+        "is_verified",
       ])
-      .where("user_id", "=", insertedID)
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
+    end({ operation: "create_user", success: "true" });
+    return result!;
   } catch (error) {
     end({ operation: "create_user", success: "false" });
     logger.error({ error }, "createUser: failed to create user");
@@ -67,16 +66,19 @@ export async function getUserById(userId: number) {
         "user_id",
         "username",
         "email",
-        "bio",
-        "is_active",
-        "is_verified",
         "user_type",
+        "company_name",
+        "company_email",
+        "plan_type",
+        "plan_expires_at",
         "first_name",
         "last_name",
         "phone_number",
-        "plan_type",
-        "plan_expires_at",
+        "avatar_url",
+        "bio",
         "created_at",
+        "is_active",
+        "is_verified",
       ])
       .execute();
 
@@ -195,4 +197,108 @@ export async function verifyPassword({
     logger.error({ error }, "verifyPassword: failed to verify password");
     throw error;
   }
+}
+
+/**
+ * Store user session
+ */
+
+export async function storeUserSession(
+  userId: number,
+  refreshToken: string,
+  ipAddress: string,
+  userAgent: string,
+  expiresAt: Date
+) {
+  const end = databaseQueryTimeHistogram.startTimer();
+  try {
+    // Invalidate existing refresh tokens for the user
+    await db
+      .updateTable("sessions")
+      .set({ is_valid: false }) // Mark existing refresh tokens as invalid
+      .where("user_id", "=", userId)
+      .execute();
+
+    // Insert new session
+    await db
+      .insertInto("sessions")
+      .values({
+        user_id: userId,
+        refresh_token: refreshToken,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        is_valid: true,
+        expires_at: expiresAt.toISOString().slice(0, 19).replace("T", " "),
+      })
+      .executeTakeFirst();
+    await db
+      .updateTable("users")
+      .set("last_login_at", sql`NOW()`)
+      .execute();
+
+    end({ operation: "store_user_session", success: "true" });
+  } catch (error) {
+    end({ operation: "store_user_session", success: "false" });
+
+    logger.error(
+      { error, userId },
+      "storeUserSession: failed to store session"
+    );
+    throw error;
+  }
+}
+
+export async function getUserSessionByRefreshToken(
+  refreshToken: string,
+  user_id: number
+): Promise<any> {
+  const end = databaseQueryTimeHistogram.startTimer();
+  try {
+    const result = await db
+      .selectFrom("sessions")
+      .select(["session_id", "user_id", "refresh_token", "expires_at"])
+      .where("user_id", "=", user_id)
+      .where("refresh_token", "=", refreshToken)
+      .where("is_valid", "=", true)
+      // .where("expires_at", ">", new Date())
+      .execute();
+    end({ operation: "get_user_session", success: "true" });
+    if (result.length > 1) {
+      logger.error({ user_id }, "userSessions: More than one session found");
+      invalidateUserSession(user_id);
+      end({ operation: "update_user_session_validity", success: "true" });
+      throw new Error("More than one session found");
+    } else if (result.length === 1) {
+      if (result[0].expires_at < new Date()) {
+        await db
+          .updateTable("sessions")
+          .set({ is_valid: false })
+          .where("user_id", "=", user_id)
+          .execute();
+        end({ operation: "update_user_session_validity", success: "true" });
+        logger.error(
+          { user_id },
+          "userSessions: Session expired (refresh_token expired)"
+        );
+        throw new Error("Session expired");
+      }
+
+      return result;
+    } else if (result.length === 0) {
+      logger.error({ user_id }, "userSessions: No session found");
+      throw new Error("No session found");
+    }
+    return result;
+  } catch (error) {
+    end({ operation: "get_user_session", success: "false" });
+    return error;
+  }
+}
+
+export async function invalidateUserSession(user_id: number) {
+  await db
+    .updateTable("sessions")
+    .set({ is_valid: false })
+    .where("user_id", "=", user_id)
+    .execute();
 }

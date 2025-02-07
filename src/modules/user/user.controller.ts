@@ -6,6 +6,9 @@ import {
   deleteUser,
   findUserByEmail,
   verifyPassword,
+  storeUserSession,
+  getUserSessionByRefreshToken,
+  invalidateUserSession,
 } from "./user.service";
 import { httpError } from "../../utils/http";
 import { StatusCodes } from "http-status-codes";
@@ -26,6 +29,9 @@ import {
   successResponseSchema,
 } from "./user.schema";
 import { auth } from "../../common/helpers/authenticate";
+import cookie from "@fastify/cookie";
+import { verifyToken } from "../../utils/utils";
+import { PostgresError } from "postgres";
 
 export const usersController: FastifyPluginCallback = (server, _, done) => {
   /**
@@ -98,9 +104,9 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
 
         return reply.code(StatusCodes.CREATED).send(user);
       } catch (e) {
-        const error = e as QueryError;
+        const error = e as PostgresError;
 
-        if (error.code === "ER_DUP_ENTRY") {
+        if (error.code === "23505") {
           return httpError({
             reply,
             message: "User already exists",
@@ -108,7 +114,6 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
             code: StatusCodes.CONFLICT,
           });
         }
-
         logger.error({ error }, "createUser: error creating user");
         return httpError({
           reply,
@@ -117,7 +122,7 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
           cause: error.message,
         });
       }
-    },
+    }
   );
 
   /**
@@ -187,7 +192,7 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
           cause: error.message,
         });
       }
-    },
+    }
   );
 
   /**
@@ -266,7 +271,7 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
           cause: error.message,
         });
       }
-    },
+    }
   );
 
   /**
@@ -338,15 +343,36 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
           cause: error.message,
         });
       }
-    },
+    }
   );
 
+  // TODO: Invalidate the accessToken immediately after another login
   server.post<{
     Body: IUserBody;
     Reply: ILoginReply;
   }>(
     "/login",
-    // { schema: { ...userBodySchema, ...loginResponseSchema } },
+    {
+      schema: {
+        tags: ["Auth"],
+        summary: "Login user",
+        description: "Logs in a user",
+        body: {
+          type: "object",
+          properties: {
+            email: { type: "string", description: "Email of user" },
+            password: { type: "string", description: "Password of user" },
+          },
+          required: ["email", "password"],
+        },
+        response: {
+          // 200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
     async (req, reply) => {
       const { email, password } = req.body;
       const user = await findUserByEmail({ email });
@@ -370,7 +396,7 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
         });
       }
 
-      const token = server.jwt.sign(
+      const accessToken = server.jwt.sign(
         {
           user_id: user.user_id,
           username: user.username,
@@ -378,16 +404,144 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
         },
         {
           algorithm: "HS512",
-          expiresIn: "1h",
-        },
+          expiresIn: "15m",
+        }
       );
-      reply.code(200).send({
-        token: token,
-        user_id: Number(user.user_id),
-        username: user.username,
-        email: user.email,
-      });
+      const refreshToken = server.jwt.sign(
+        {
+          user_id: user.user_id,
+          username: user.username,
+          email: user.email,
+        },
+        {
+          algorithm: "HS512",
+          expiresIn: "10d",
+        }
+      );
+      await storeUserSession(
+        user.user_id,
+        refreshToken,
+        req.ip,
+        req.headers["user-agent"] || "",
+        new Date(Date.now() + 60 * 60 * 24 * 10 * 1000)
+      );
+      const refreshTokenCookie = cookie.serialize(
+        "refresh_token",
+        refreshToken,
+        {
+          httpOnly: true,
+          maxAge: 60 * 60 * 24 * 10,
+        }
+      );
+      reply
+        .code(200)
+        .header("Set-Cookie", refreshTokenCookie)
+        .send({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          user_id: Number(user.user_id),
+          username: user.username,
+          email: user.email,
+        });
+    }
+  );
+
+  server.post<{
+    Body: { access_token: string };
+    Reply:
+      | { access_token: string; refresh_token: string; user_id: number }
+      | { message: string; user_id?: number }; // Include user_id in error response
+  }>(
+    "/refresh",
+    {
+      schema: {
+        tags: ["Auth"],
+        summary: "Refresh access token of user",
+        description: "Reset's the token of a user",
+        body: {
+          type: "object",
+          properties: {
+            access_token: {
+              type: "string",
+              description: "Access token of user",
+            },
+          },
+          required: ["access_token"],
+        },
+        response: {
+          // 200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
     },
+    async (req, reply) => {
+      const { access_token } = req.body;
+      const refresh_token = req.cookies.refresh_token;
+
+      const verificationResult = await verifyToken(access_token, reply, server);
+
+      if (verificationResult === null) {
+        return; // verifyToken already sent the error
+      }
+
+      if (verificationResult.expired) {
+        if (refresh_token && verificationResult.user_id) {
+          // Check if user_id exists
+          await invalidateUserSession(verificationResult.user_id); // Pass user_id
+        }
+        return reply.status(StatusCodes.UNAUTHORIZED).send({
+          message: "Token Expired. Please login again.",
+          user_id: verificationResult.user_id,
+        });
+      }
+
+      if (verificationResult.error) {
+        return reply
+          .status(StatusCodes.UNAUTHORIZED)
+          .send({ message: verificationResult.error });
+      }
+
+      const { user_id, email } = verificationResult;
+
+      try {
+        const session = await getUserSessionByRefreshToken(
+          refresh_token!,
+          user_id!
+        ); // Use user_id here
+        if (session instanceof Error) {
+          console.error("ERROR", session);
+          return reply
+            .status(StatusCodes.UNAUTHORIZED)
+            .send({ message: "Invalid refresh token." });
+        }
+
+        const newAccessToken = server.jwt.sign(
+          { user_id, email },
+          { algorithm: "HS512", expiresIn: "15m" }
+        );
+
+        reply.setCookie("refresh_token", refresh_token!, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          maxAge: 60 * 60 * 24 * 7,
+          path: "/",
+        });
+
+        reply.code(StatusCodes.OK).send({
+          access_token: newAccessToken,
+          refresh_token: refresh_token!,
+          user_id: user_id!,
+        });
+      } catch (error) {
+        console.error("Error in refresh route:", error);
+        reply
+          .status(StatusCodes.INTERNAL_SERVER_ERROR)
+          .send({ message: "An error occurred." });
+      }
+    }
   );
 
   done();

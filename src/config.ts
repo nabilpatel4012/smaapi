@@ -16,4 +16,8 @@ export const config = {
   METRICS_PREFIX: process.env.METRICS_PREFIX || "app_",
   COOKIE_NAME: process.env.COOKIE_NAME || "session",
   JWT_SECRET: process.env.JWT_SECRET,
+  DRAGONFLY_PASSWORD: process.env.DRAGONFLY_PASSWORD,
+  VALKEY_HOST: process.env.VALKEY_HOST,
+  VALKEY_PORT: Number(process.env.VALKEY_PORT),
+  MONGO_URI: process.env.MONGO_URI || "",
 };
