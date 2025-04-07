@@ -11,6 +11,18 @@ export const userProjectBodySchema = {
   },
 } as const;
 
+export const userProjectUpdateSchema = {
+  type: "object",
+  properties: {
+    project_name: { type: "string", minLength: 3, maxLength: 100 },
+    project_description: { type: "string", maxLength: 500, nullable: true },
+    tags: {
+      type: "object",
+      nullable: true,
+    },
+  },
+} as const;
+
 export const userProjectQuerySchema = {
   type: "object",
   properties: {

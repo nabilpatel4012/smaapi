@@ -98,6 +98,7 @@ export type ProjectMemberUpdate = Updateable<ProjectMembersTable>;
 export interface ApisTable {
   api_id: Generated<number>;
   user_id: number;
+  project_id: number;
   api_name: string;
   api_description: string | null;
   created_at: ColumnType<Date, string | undefined, never>;
@@ -146,14 +147,10 @@ export type ApiMiddlewareUpdate = Updateable<ApiMiddlewareTable>;
 
 export interface ApiEndpointsTable {
   endpoint_id: Generated<number>;
-  version_id: number;
   endpoint_path: string;
   http_method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD";
-  request_schema_id: string | null; // MongoDB _id as string
-  response_schema_id: string | null; // MongoDB _id as string
-  query_params: ColumnType<object | null, object | undefined, never>;
-  headers: ColumnType<object | null, object | undefined, never>;
-  body_schema: ColumnType<object | null, object | undefined, never>;
+  endpoint_description: string;
+  created_at: ColumnType<Date, string | undefined, never>;
 }
 
 export type ApiEndpoint = Selectable<ApiEndpointsTable>;

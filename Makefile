@@ -9,7 +9,7 @@ TSX := tsx
 
 # Targets
 start: ## Start the application with tsx --watch
-	npm start | pino-pretty
+	pnpm run dev | pino-pretty
 
 test: ## Run the test command
 	@echo "Error: no test specified" && exit 1

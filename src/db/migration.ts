@@ -54,10 +54,35 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .execute();
 
   await db.schema
+    .createTable("projects")
+    .addColumn("project_id", "serial", (col) => col.primaryKey())
+    .addColumn("user_id", "integer", (col) =>
+      col.references("users.user_id").onDelete("cascade").notNull()
+    )
+    .addColumn("project_name", "varchar(255)", (col) => col.notNull())
+    .addColumn("project_description", "text")
+    .addColumn("tags", "json")
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`now()`).notNull()
+    )
+    .addUniqueConstraint("unique_user_project_name", [
+      "project_name",
+      "user_id",
+    ])
+    .execute();
+
+  await db.schema
     .createTable("apis")
     .addColumn("api_id", "serial", (col) => col.primaryKey())
     .addColumn("user_id", "integer", (col) =>
       col.references("users.user_id").onDelete("cascade").notNull()
+    )
+    .addColumn(
+      "project_id",
+      "integer",
+      (
+        col // Add project_id column
+      ) => col.references("projects.project_id").onDelete("cascade").notNull() // Foreign key to projects
     )
     .addColumn("api_name", "varchar(500)", (col) => col.notNull())
     .addColumn("api_description", "text")
@@ -105,13 +130,19 @@ export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable("api_endpoints")
     .addColumn("endpoint_id", "serial", (col) => col.primaryKey())
-    .addColumn("version_id", "integer", (col) =>
-      col.references("api_versions.version_id").onDelete("cascade").notNull()
+    .addColumn(
+      "api_id",
+      "integer",
+      (
+        col // Changed to api_id
+      ) => col.references("apis.api_id").onDelete("cascade").notNull() // Directly references apis
     )
     .addColumn("endpoint_path", "varchar(500)", (col) => col.notNull())
     .addColumn("http_method", "varchar(50)", (col) => col.notNull())
-    .addColumn("request_schema_id", "varchar(200)")
-    .addColumn("response_schema_id", "varchar(200)")
+    .addColumn("endpoint_description", "varchar(500)")
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`now()`).notNull()
+    )
     .execute();
 
   await db.schema
@@ -132,24 +163,6 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("role_id", "serial", (col) => col.primaryKey())
     .addColumn("role_name", "varchar(100)", (col) => col.unique().notNull())
     .addColumn("role_description", "text")
-    .execute();
-
-  await db.schema
-    .createTable("projects")
-    .addColumn("project_id", "serial", (col) => col.primaryKey())
-    .addColumn("user_id", "integer", (col) =>
-      col.references("users.user_id").onDelete("cascade").notNull()
-    )
-    .addColumn("project_name", "varchar(255)", (col) => col.notNull())
-    .addColumn("project_description", "text")
-    .addColumn("tags", "json")
-    .addColumn("created_at", "timestamp", (col) =>
-      col.defaultTo(sql`now()`).notNull()
-    )
-    .addUniqueConstraint("unique_user_project_name", [
-      "project_name",
-      "user_id",
-    ])
     .execute();
 
   await db.schema
@@ -186,6 +199,11 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .column("user_id")
     .execute();
   await db.schema
+    .createIndex("idx_apis_project_id")
+    .on("apis")
+    .column("project_id")
+    .execute();
+  await db.schema
     .createIndex("idx_sessions_user_id")
     .on("sessions")
     .column("user_id")
@@ -218,16 +236,22 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .on("api_middleware")
     .column("version_id")
     .execute();
-  await db.schema
-    .createIndex("idx_api_endpoints_version_id")
-    .on("api_endpoints")
-    .column("version_id")
-    .execute();
+  // await db.schema
+  //   .createIndex("idx_api_endpoints_version_id")
+  //   .on("api_endpoints")
+  //   .column("version_id")
+  //   .execute();
   await db.schema
     .createIndex("idx_api_keys_api_id")
     .on("api_keys")
     .column("api_id")
     .execute();
+  await db.schema
+    .createIndex("idx_api_endpoints_api_id") // New index
+    .on("api_endpoints")
+    .column("api_id")
+    .execute();
+
   await db.schema
     .createIndex("idx_api_endpoints_path_method")
     .on("api_endpoints")
@@ -258,7 +282,6 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
 export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema.dropTable("project_members").execute();
-  await db.schema.dropTable("projects").execute();
   await db.schema.dropTable("user_roles").execute();
   await db.schema.dropTable("api_keys").execute();
   await db.schema.dropTable("api_endpoints").execute();
@@ -266,6 +289,7 @@ export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema.dropTable("middleware").execute();
   await db.schema.dropTable("api_versions").execute();
   await db.schema.dropTable("apis").execute();
+  await db.schema.dropTable("projects").execute();
   await db.schema.dropTable("sessions").execute();
   await db.schema.dropTable("users").execute();
 }
