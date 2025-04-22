@@ -1,7 +1,7 @@
 import argon2 from "argon2";
 import { Insertable, sql, Updateable } from "kysely"; // Import Kysely types
 import { db } from "../../db/db"; // Your Kysely instance
-import { UsersTable } from "../../db/kysley.schema"; // Import the Kysely table interface
+import { UsersTable } from "../../db/kysely.schema"; // Import the Kysely table interface
 import { databaseQueryTimeHistogram } from "../../utils/metrics";
 import { logger } from "../../utils/logger";
 import { IUserReply } from "../../common/types/user.types";
@@ -14,18 +14,24 @@ export async function createUser(
 ): Promise<IUserReply> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
-    const hashedPassword = await argon2.hash(values.password_hash); // Hash the password
+    const hashedPassword = await argon2.hash(values.password_hash);
+
     const payload: Insertable<UsersTable> = {
       ...values,
-      username: values.username,
       email: values.email.toLowerCase(),
       password_hash: hashedPassword,
     };
 
-    const result = await db
+    const insertResult = await db
       .insertInto("users")
       .values(payload)
-      .returning([
+      .executeTakeFirst();
+
+    const insertedId = Number(insertResult.insertId);
+
+    const result = await db
+      .selectFrom("users")
+      .select([
         "user_id",
         "username",
         "email",
@@ -43,7 +49,9 @@ export async function createUser(
         "is_active",
         "is_verified",
       ])
+      .where("user_id", "=", insertedId)
       .executeTakeFirst();
+
     end({ operation: "create_user", success: "true" });
     return result!;
   } catch (error) {
@@ -158,14 +166,16 @@ export async function updateUser(
 export async function deleteUser(userId: number) {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
+    const payload = { isDeleted: true, deletedAt: new Date() };
     const result = await db
-      .deleteFrom("users")
+      .updateTable("users")
+      .set(payload)
       .where("user_id", "=", userId)
       .executeTakeFirst();
 
     end({ operation: "delete_user", success: "true" });
 
-    return result.numDeletedRows > 0;
+    return result.numUpdatedRows > 0;
   } catch (error) {
     end({ operation: "delete_user", success: "false" });
 

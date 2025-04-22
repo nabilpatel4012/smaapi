@@ -1,6 +1,6 @@
-import UserApiSchema from "./schema/db-schema";
+import { Api } from "./schema/db-schema";
 
 export async function getSmaapiStructure() {
-  const result = UserApiSchema.find();
+  const result = Api.find();
   return result;
 }

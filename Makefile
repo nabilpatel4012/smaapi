@@ -8,6 +8,9 @@ SHELL := /bin/bash
 TSX := tsx
 
 # Targets
+dev: ## Start the application with tsx --watch
+	docker compose -f docker-compose.dev.yml up -d && pnpm run dev | pino-pretty
+
 start: ## Start the application with tsx --watch
 	pnpm run dev | pino-pretty
 

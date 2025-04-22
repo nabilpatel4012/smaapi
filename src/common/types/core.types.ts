@@ -1,13 +1,11 @@
 export interface IProjectBody {
   project_name: string;
   project_description?: string;
-  tags?: object;
 }
 
 export interface IProjectUpdateBody {
   project_name?: string;
   project_description?: string;
-  tags?: object;
 }
 
 export interface IProjectQueryParams {
@@ -21,7 +19,6 @@ export interface IProjectReply {
   user_id: number;
   project_name: string;
   project_description?: string | null;
-  tags?: object | null;
   created_at: Date | string;
 }
 

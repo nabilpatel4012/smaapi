@@ -39,6 +39,8 @@ export interface UsersTable {
   last_login_at: ColumnType<Date | null, string | undefined, never>;
   is_verified: boolean;
   is_active: boolean;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type User = Selectable<UsersTable>;
@@ -64,6 +66,8 @@ export interface UserRolesTable {
   role_id: Generated<number>;
   role_name: string;
   role_description: string | null;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type UserRole = Selectable<UserRolesTable>;
@@ -75,8 +79,9 @@ export interface ProjectsTable {
   user_id: number;
   project_name: string;
   project_description: string | null;
-  tags: ColumnType<object | null, object | undefined, never>; // JSON array of tags
   created_at: ColumnType<Date, string | undefined, never>;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type Project = Selectable<ProjectsTable>;
@@ -89,6 +94,8 @@ export interface ProjectMembersTable {
   user_id: number;
   role_id: number | null; // Can be null if role is removed
   added_at: ColumnType<Date, string | undefined, never>;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type ProjectMember = Selectable<ProjectMembersTable>;
@@ -104,6 +111,8 @@ export interface ApisTable {
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date | null, string | undefined, never>;
   api_status: "draft" | "active" | "inactive" | "suspended";
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type Api = Selectable<ApisTable>;
@@ -116,6 +125,8 @@ export interface ApiVersionsTable {
   version_number: string;
   created_at: ColumnType<Date, string | undefined, never>;
   is_current: boolean;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type ApiVersion = Selectable<ApiVersionsTable>;
@@ -127,6 +138,8 @@ export interface MiddlewareTable {
   middleware_name: string;
   middleware_description: string | null;
   configuration_schema: ColumnType<object | null, object | undefined, never>; // JSON Schema
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type Middleware = Selectable<MiddlewareTable>;
@@ -139,6 +152,8 @@ export interface ApiMiddlewareTable {
   middleware_id: number;
   middleware_order: number | null;
   middleware_config: ColumnType<object | null, object | undefined, never>; // Instance config
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type ApiMiddleware = Selectable<ApiMiddlewareTable>;
@@ -151,6 +166,8 @@ export interface ApiEndpointsTable {
   http_method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD";
   endpoint_description: string;
   created_at: ColumnType<Date, string | undefined, never>;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type ApiEndpoint = Selectable<ApiEndpointsTable>;
@@ -163,6 +180,8 @@ export interface ApiKeysTable {
   api_key: string;
   created_at: ColumnType<Date, string | undefined, never>;
   is_active: boolean;
+  isDeleted: boolean; // Soft delete flag
+  deletedAt: ColumnType<Date | null, string | undefined, never>; // Soft delete timestamp
 }
 
 export type ApiKey = Selectable<ApiKeysTable>;

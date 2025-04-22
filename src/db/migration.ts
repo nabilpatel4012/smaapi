@@ -1,5 +1,5 @@
 import { Kysely, sql } from "kysely";
-import { Database } from "./kysley.schema";
+import { Database } from "./kysely.schema";
 
 export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
@@ -35,6 +35,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
       col.defaultTo(false).notNull()
     )
     .addColumn("is_active", "boolean", (col) => col.defaultTo(true).notNull())
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -61,7 +63,6 @@ export async function up(db: Kysely<Database>): Promise<void> {
     )
     .addColumn("project_name", "varchar(255)", (col) => col.notNull())
     .addColumn("project_description", "text")
-    .addColumn("tags", "json")
     .addColumn("created_at", "timestamp", (col) =>
       col.defaultTo(sql`now()`).notNull()
     )
@@ -69,6 +70,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
       "project_name",
       "user_id",
     ])
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -91,6 +94,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     )
     .addColumn("updated_at", "timestamp")
     .addColumn("api_status", "varchar(50)", (col) => col.defaultTo("draft"))
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -104,6 +109,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
       col.defaultTo(sql`now()`).notNull()
     )
     .addColumn("is_current", "boolean", (col) => col.defaultTo(true))
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -112,6 +119,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("middleware_name", "varchar(250)", (col) => col.notNull())
     .addColumn("middleware_description", "text")
     .addColumn("configuration_schema", "json")
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -125,6 +134,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     )
     .addColumn("middleware_order", "integer")
     .addColumn("middleware_config", "json")
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -143,6 +154,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("created_at", "timestamp", (col) =>
       col.defaultTo(sql`now()`).notNull()
     )
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -156,6 +169,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
       col.defaultTo(sql`now()`).notNull()
     )
     .addColumn("is_active", "boolean", (col) => col.defaultTo(true))
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -163,6 +178,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("role_id", "serial", (col) => col.primaryKey())
     .addColumn("role_name", "varchar(100)", (col) => col.unique().notNull())
     .addColumn("role_description", "text")
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   await db.schema
@@ -180,6 +197,8 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("added_at", "timestamp", (col) =>
       col.defaultTo(sql`now()`).notNull()
     )
+    .addColumn("isDeleted", "boolean", (col) => col.defaultTo(false).notNull()) // Soft delete flag
+    .addColumn("deletedAt", "timestamp") // Soft delete timestamp
     .execute();
 
   // Indexes
@@ -277,6 +296,108 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .createIndex("idx_project_members_user_id")
     .on("project_members")
     .column("user_id")
+    .execute();
+
+  // Indexes for soft delete
+  await db.schema
+    .createIndex("idx_users_isDeleted")
+    .on("users")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_users_deletedAt")
+    .on("users")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_projects_isDeleted")
+    .on("projects")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_projects_deletedAt")
+    .on("projects")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_apis_isDeleted")
+    .on("apis")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_apis_deletedAt")
+    .on("apis")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_versions_isDeleted")
+    .on("api_versions")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_versions_deletedAt")
+    .on("api_versions")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_middleware_isDeleted")
+    .on("middleware")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_middleware_deletedAt")
+    .on("middleware")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_middleware_isDeleted")
+    .on("api_middleware")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_middleware_deletedAt")
+    .on("api_middleware")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_endpoints_isDeleted")
+    .on("api_endpoints")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_endpoints_deletedAt")
+    .on("api_endpoints")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_keys_isDeleted")
+    .on("api_keys")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_api_keys_deletedAt")
+    .on("api_keys")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_user_roles_isDeleted")
+    .on("user_roles")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_user_roles_deletedAt")
+    .on("user_roles")
+    .column("deletedAt")
+    .execute();
+  await db.schema
+    .createIndex("idx_project_members_isDeleted")
+    .on("project_members")
+    .column("isDeleted")
+    .execute();
+  await db.schema
+    .createIndex("idx_project_members_deletedAt")
+    .on("project_members")
+    .column("deletedAt")
     .execute();
 }
 

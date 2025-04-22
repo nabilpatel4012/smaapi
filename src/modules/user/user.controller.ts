@@ -100,6 +100,7 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
           bio: bio || null,
           is_active: true,
           is_verified: false,
+          isDeleted: false,
         });
 
         return reply.code(StatusCodes.CREATED).send(user);

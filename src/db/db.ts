@@ -1,20 +1,22 @@
-import { Database } from "./kysley.schema";
+import { Database } from "./kysely.schema";
 import { Pool } from "pg";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, MysqlDialect, sql } from "kysely";
 import { config } from "../config";
 import "dotenv/config";
 import Redis from "ioredis";
 import mongoose from "mongoose";
+import { createPool } from "mysql2";
 
-const dialect = new PostgresDialect({
-  pool: new Pool({
+const dialect = new MysqlDialect({
+  pool: createPool({
     database: config.DATABASE_NAME,
     host: config.DATABASE_HOST,
     user: config.DATABASE_USERNAME,
     password: config.DATABASE_PASSWORD,
     port: config.DATABASE_PORT,
-    max: 200,
-    connectionTimeoutMillis: 5000,
+    waitForConnections: true,
+    connectionLimit: 300,
+    queueLimit: 0,
   }),
 });
 

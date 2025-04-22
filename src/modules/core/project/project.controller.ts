@@ -1,5 +1,4 @@
 import { FastifyPluginCallback } from "fastify";
-import { PostgresError } from "postgres";
 import { httpError } from "../../../utils/http";
 import { StatusCodes } from "http-status-codes";
 import {
@@ -40,7 +39,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
           "This endpoint creates a new project for the authenticated user.",
         body: userProjectBodySchema,
         response: {
-          201: userProjectBodySchema,
+          201: userProjectResponseSchema,
           400: errorResponseSchema,
           409: errorResponseSchema, // Duplicate entry
           500: errorResponseSchema,
@@ -49,24 +48,25 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { project_name, project_description, tags } = req.body;
+        const { project_name, project_description } = req.body;
         const response = await createProject({
           project_name,
           project_description,
-          tags,
           user_id: req.user.user_id,
+          isDeleted: false,
         });
-        return reply.code(StatusCodes.OK).send(response);
+        return reply.code(StatusCodes.CREATED).send(response);
       } catch (e) {
-        const error = e as PostgresError;
-        if (error.code === "23505") {
+        const error = e as QueryError;
+        if (error.code === "ER_DUP_ENTRY") {
           return httpError({
             code: StatusCodes.CONFLICT,
-            message: "Project name already exist",
-            cause: "You have entered a name which already exist",
+            message: "Project name already exists",
+            cause: "You have entered a name which already exists",
             reply,
           });
         }
+        logger.error({ error }, "createProject: Error creating project");
         return httpError({
           code: StatusCodes.INTERNAL_SERVER_ERROR,
           message: "Internal Server Error",
@@ -98,28 +98,33 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { page, size, name } = req.query;
+        const { page = 1, size = 10, name } = req.query;
         const pageNumber = Number(page);
         const sizeNumber = Number(size);
 
         if (
-          (page && isNaN(pageNumber)) ||
-          (size && isNaN(sizeNumber)) ||
+          isNaN(pageNumber) ||
+          isNaN(sizeNumber) ||
           pageNumber < 1 ||
           sizeNumber < 1
         ) {
-          return reply
-            .code(400)
-            .send({ message: "Invalid page or size parameters." });
+          return httpError({
+            reply,
+            message: "Invalid page or size parameters",
+            code: StatusCodes.BAD_REQUEST,
+          });
         }
+
+        const offset = (pageNumber - 1) * sizeNumber;
         const response = await getProjects(
-          (pageNumber - 1) * sizeNumber,
+          offset,
           sizeNumber,
           req.user.user_id,
           name
         );
         return reply.code(StatusCodes.OK).send(response);
       } catch (e) {
+        logger.error({ error: e }, "getProjects: Error fetching projects");
         return httpError({
           code: StatusCodes.INTERNAL_SERVER_ERROR,
           message: "Internal Server Error",
@@ -129,7 +134,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     }
   );
 
-  server.get<{ Params: IIdParams; Reply: IProjectReply }>(
+  server.get<{ Params: IIdParams; Reply: IProjectReply | IErrorReply }>(
     "/:id",
     {
       ...auth(server),
@@ -141,6 +146,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
         response: {
           200: userProjectResponseSchema,
           400: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
@@ -155,26 +161,28 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
             code: StatusCodes.BAD_REQUEST,
           });
         }
-        const result = await getProjectById(Number(id), req.user.user_id);
-        if (!result) {
-          return httpError({
-            reply,
-            message: "Project not found",
-            code: StatusCodes.NOT_FOUND,
-          });
+
+        try {
+          const result = await getProjectById(Number(id), req.user.user_id);
+          return reply.code(StatusCodes.OK).send(result);
+        } catch (error) {
+          // Check if it's a "not found" error message
+          if (error instanceof Error && error.message.includes("not found")) {
+            return httpError({
+              reply,
+              message: "Project not found",
+              code: StatusCodes.NOT_FOUND,
+            });
+          }
+          throw error; // Re-throw for other errors
         }
-
-        return reply.code(StatusCodes.OK).send(result);
       } catch (e) {
-        const error = e as QueryError;
-
-        logger.error({ error }, "getProjectById: Error fetching project");
-
+        logger.error({ error: e }, "getProjectById: Error fetching project");
         return httpError({
           reply,
           message: "Error fetching project",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
-          cause: error.message,
+          cause: e instanceof Error ? e.message : "Unknown error",
         });
       }
     }
@@ -210,7 +218,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       const { id } = req.params;
-      const { project_name, project_description, tags } = req.body; // Destructure the update fields
+      const { project_name, project_description } = req.body;
 
       try {
         if (!id || isNaN(Number(id))) {
@@ -221,11 +229,16 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
+        // Type-safe payload building
+        const updatePayload: Record<string, any> = {};
+        if (project_name !== undefined)
+          updatePayload.project_name = project_name;
+        if (project_description !== undefined)
+          updatePayload.project_description = project_description;
+
         const updatedProject = await updateProject(
           Number(id),
-          //TODO: FIND BETTER SOLUTOION INSTEAD OF TS IGNORE
-          //@ts-ignore
-          { project_name, project_description, tags },
+          updatePayload,
           req.user.user_id
         );
 
@@ -239,13 +252,12 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
 
         return reply.code(StatusCodes.OK).send(updatedProject);
       } catch (e) {
-        const error = e as PostgresError;
-        logger.error({ error }, "updateProject: Error updating project");
+        logger.error({ error: e }, "updateProject: Error updating project");
         return httpError({
           reply,
           message: "Error updating project",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
-          cause: error.message,
+          cause: e instanceof Error ? e.message : "Unknown error",
         });
       }
     }
@@ -258,7 +270,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
       schema: {
         tags: ["Core"],
         summary: "Delete a project",
-        description: "This endpoint deletes an existing project.",
+        description: "This endpoint soft-deletes an existing project.",
         params: {
           type: "object",
           properties: {
@@ -285,6 +297,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
             code: StatusCodes.BAD_REQUEST,
           });
         }
+
         const deletedProject = await deleteProject(
           Number(id),
           req.user.user_id
@@ -297,16 +310,15 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
             code: StatusCodes.NOT_FOUND,
           });
         }
+
         return reply.code(StatusCodes.OK).send(deletedProject);
       } catch (e) {
-        const error = e as PostgresError;
-        logger.error({ error }, "deleteProject: Error deleting project");
-
+        logger.error({ error: e }, "deleteProject: Error deleting project");
         return httpError({
           reply,
           message: "Error deleting project",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
-          cause: error.message,
+          cause: e instanceof Error ? e.message : "Unknown error",
         });
       }
     }

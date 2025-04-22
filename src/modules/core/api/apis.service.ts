@@ -2,7 +2,7 @@ import { Insertable, Updateable } from "kysely";
 import { db } from "../../../db/db";
 import { databaseQueryTimeHistogram } from "../../../utils/metrics";
 import { logger } from "../../../utils/logger";
-import { ApisTable } from "../../../db/kysley.schema";
+import { ApisTable } from "../../../db/kysely.schema";
 import { IApiBody, IApiReply } from "../../../common/types/api.types";
 import { Api } from "../../core/schema/db-schema"; // Import the Mongoose model
 

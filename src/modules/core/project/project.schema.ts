@@ -4,10 +4,6 @@ export const userProjectBodySchema = {
   properties: {
     project_name: { type: "string", minLength: 3, maxLength: 100 },
     project_description: { type: "string", maxLength: 500, nullable: true },
-    tags: {
-      type: "object",
-      nullable: true,
-    },
   },
 } as const;
 
@@ -16,10 +12,6 @@ export const userProjectUpdateSchema = {
   properties: {
     project_name: { type: "string", minLength: 3, maxLength: 100 },
     project_description: { type: "string", maxLength: 500, nullable: true },
-    tags: {
-      type: "object",
-      nullable: true,
-    },
   },
 } as const;
 
@@ -46,11 +38,6 @@ export const userProjectsResponseSchema = {
         type: ["string", "null"],
         description: "Project description (optional)",
       },
-      tags: {
-        type: ["object", "null"],
-        additionalProperties: { type: "string" },
-        description: "An object containing tag key-value pairs",
-      },
       created_at: { type: "string", format: "date-time" },
     },
   },
@@ -65,11 +52,6 @@ export const userProjectResponseSchema = {
     project_description: {
       type: ["string", "null"],
       description: "Project description (optional)",
-    },
-    tags: {
-      type: ["object", "null"],
-      additionalProperties: { type: "string" },
-      description: "An object containing tag key-value pairs",
     },
     created_at: { type: "string", format: "date-time" },
   },
