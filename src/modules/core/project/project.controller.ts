@@ -33,7 +33,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["Projects", "Core"],
         summary: "Create a new project",
         description:
           "This endpoint creates a new project for the authenticated user.",
@@ -84,7 +84,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["Projects", "Core"],
         summary: "Get list of projects",
         description:
           "This endpoint returns list of projects for the authenticated user, it also supports some query params for pagination and filtering.",
@@ -139,7 +139,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["Projects", "Core"],
         summary: "Get a project by project Id",
         description:
           "This endpoint returns a project for the authenticated user.",
@@ -197,7 +197,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["Projects", "Core"],
         summary: "Update a project",
         description: "This endpoint updates an existing project.",
         body: userProjectUpdateSchema, // Use the update schema
@@ -268,7 +268,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["Projects", "Core"],
         summary: "Delete a project",
         description: "This endpoint soft-deletes an existing project.",
         params: {

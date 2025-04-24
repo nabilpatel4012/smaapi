@@ -34,7 +34,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["APIs", "Core"],
         summary: "Create a new API",
         description: "This endpoint creates a new API for a specific project.",
         body: apiRequestBodySchema,
@@ -48,35 +48,20 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const {
-          project_id,
-          api_name,
-          api_description,
-          method,
-          endpoint,
-          endpoint_description,
-          parameters,
-          allowedFilters,
-          responses,
-        } = req.body;
-
-        const response = await createApi(
-          {
-            project_id,
-            api_name,
-            api_description,
-            method,
-            endpoint,
-            endpoint_description,
-            parameters,
-            allowedFilters,
-            responses,
-          },
-          req.user.user_id
-        ); // Corrected call
-
+        const response = await createApi(req.body, req.user.user_id);
         return reply.code(StatusCodes.CREATED).send(response);
       } catch (e) {
+        // Handle validation errors
+        if (e instanceof Error && !e.hasOwnProperty("code")) {
+          return httpError({
+            code: StatusCodes.BAD_REQUEST,
+            message: e.message,
+            cause: "Invalid API data provided",
+            reply,
+          });
+        }
+
+        // Handle database-specific errors
         const error = e as PostgresError;
         if (error.code === "23505") {
           return httpError({
@@ -108,7 +93,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["APIs", "Core"],
         summary: "Get list of APIs",
         description:
           "This endpoint returns a list of APIs for a specific project, with support for pagination and filtering.",
@@ -122,24 +107,30 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { page, size, project_id, name } = req.query;
+        const { page = 1, size = 10, project_id, name } = req.query;
         const pageNumber = Number(page);
         const sizeNumber = Number(size);
         const projectIdNumber = Number(project_id);
 
         if (
-          (page && isNaN(pageNumber)) ||
-          (size && isNaN(sizeNumber)) ||
+          isNaN(pageNumber) ||
+          isNaN(sizeNumber) ||
           pageNumber < 1 ||
           sizeNumber < 1 ||
           isNaN(projectIdNumber) ||
           projectIdNumber < 1
         ) {
-          return reply.code(400).send({ message: "Invalid query parameters." });
+          return httpError({
+            code: StatusCodes.BAD_REQUEST,
+            message: "Invalid query parameters",
+            cause: "Page, size, and project_id must be positive numbers",
+            reply,
+          });
         }
 
+        const offset = (pageNumber - 1) * sizeNumber;
         const response = await getApis(
-          (pageNumber - 1) * sizeNumber,
+          offset,
           sizeNumber,
           projectIdNumber,
           req.user.user_id,
@@ -164,7 +155,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["APIs", "Core"],
         summary: "Get an API by ID",
         description:
           "This endpoint returns an API by its ID for the authenticated user.",
@@ -187,25 +178,27 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
-        const result = await getApiById(Number(id), req.user.user_id);
-        if (!result) {
-          return httpError({
-            reply,
-            message: "API not found",
-            code: StatusCodes.NOT_FOUND,
-          });
+        try {
+          const result = await getApiById(Number(id), req.user.user_id);
+          return reply.code(StatusCodes.OK).send(result);
+        } catch (error) {
+          // Check if it's a "not found" error message
+          if (error instanceof Error && error.message.includes("not found")) {
+            return httpError({
+              reply,
+              message: "API not found",
+              code: StatusCodes.NOT_FOUND,
+            });
+          }
+          throw error; // Re-throw for other errors
         }
-
-        return reply.code(StatusCodes.OK).send(result);
       } catch (e) {
-        const error = e as QueryError;
-        logger.error({ error }, "getApiById: Error fetching API");
-
+        logger.error({ error: e }, "getApiById: Error fetching API");
         return httpError({
           reply,
           message: "Error fetching API",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
-          cause: error.message,
+          cause: e instanceof Error ? e.message : "Unknown error",
         });
       }
     }
@@ -220,7 +213,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["APIs", "Core"],
         summary: "Update an API",
         description: "This endpoint updates an existing API.",
         body: apiUpdateSchema,
@@ -268,6 +261,16 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
 
         return reply.code(StatusCodes.OK).send(updatedApi);
       } catch (e) {
+        // Handle validation errors
+        if (e instanceof Error && !e.hasOwnProperty("code")) {
+          return httpError({
+            code: StatusCodes.BAD_REQUEST,
+            message: e.message,
+            cause: "Invalid API data provided",
+            reply,
+          });
+        }
+
         const error = e as PostgresError;
         logger.error({ error }, "updateApi: Error updating API");
 
@@ -297,9 +300,9 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
     {
       ...auth(server),
       schema: {
-        tags: ["Core"],
+        tags: ["APIs", "Core"],
         summary: "Delete an API",
-        description: "This endpoint deletes an existing API.",
+        description: "This endpoint soft-deletes an existing API.",
         params: {
           type: "object",
           properties: {

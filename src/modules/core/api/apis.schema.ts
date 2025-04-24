@@ -8,12 +8,12 @@ export const apiRequestBodySchema = {
       nullable: true,
       description: "API Description",
     },
-    method: {
+    http_method: {
       type: "string",
       enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
       description: "HTTP Method",
     },
-    endpoint: { type: "string", description: "API Endpoint Path" },
+    endpoint_path: { type: "string", description: "API Endpoint Path" },
     endpoint_description: {
       type: "string",
       nullable: true,
@@ -80,7 +80,7 @@ export const apiRequestBodySchema = {
       description: "Possible API Responses with Dynamic Status Codes",
     },
   },
-  required: ["project_id", "api_name", "method", "endpoint"],
+  required: ["project_id", "api_name", "http_method", "endpoint_path"],
 } as const;
 
 export const apiUpdateSchema = {
@@ -93,12 +93,12 @@ export const apiUpdateSchema = {
       nullable: true,
       description: "API Description",
     },
-    method: {
+    http_method: {
       type: "string",
       enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
       description: "HTTP Method",
     },
-    endpoint: { type: "string", description: "API Endpoint Path" },
+    endpoint_path: { type: "string", description: "API Endpoint Path" },
     endpoint_description: {
       type: "string",
       nullable: true,
@@ -191,12 +191,12 @@ export const apisResponseSchema = {
         type: ["string", "null"],
         description: "API Description (optional)",
       },
-      method: {
+      http_method: {
         type: "string",
         enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
         description: "HTTP Method",
       },
-      endpoint: { type: "string", description: "API Endpoint Path" },
+      endpoint_path: { type: "string", description: "API Endpoint Path" },
       endpoint_description: {
         type: ["string", "null"],
         description: "Endpoint Description (optional)",
@@ -230,12 +230,12 @@ export const apiResponseSchema = {
       type: ["string", "null"],
       description: "API Description (optional)",
     },
-    method: {
+    http_method: {
       type: "string",
       enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
       description: "HTTP Method",
     },
-    endpoint: { type: "string", description: "API Endpoint Path" },
+    endpoint_path: { type: "string", description: "API Endpoint Path" },
     endpoint_description: {
       type: ["string", "null"],
       description: "Endpoint Description (optional)",
