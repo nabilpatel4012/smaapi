@@ -76,6 +76,7 @@ export interface ProjectsTable {
   project_name: string;
   project_description: string | null;
   db_type: string;
+  db_instance_type: "SMAAPI_GEN" | "CUSTOM";
   subdomain_url: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
   isDeleted: boolean;

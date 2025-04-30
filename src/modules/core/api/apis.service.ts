@@ -195,36 +195,36 @@ export async function getApis(
   project_id: number,
   user_id: number,
   name?: string
-): Promise<IApiReply[]> {
+): Promise<any[]> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
-    let query = db
-      .selectFrom("apis")
-      .selectAll()
-      .where("project_id", "=", project_id)
-      .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false);
+    // let query = db
+    //   .selectFrom("apis")
+    //   .selectAll()
+    //   .where("project_id", "=", project_id)
+    //   .where("user_id", "=", user_id)
+    //   .where("isDeleted", "=", false);
 
-    if (name) {
-      query = query.where("api_name", "like", `%${name}%`);
-    }
+    // if (name) {
+    //   query = query.where("api_name", "like", `%${name}%`);
+    // }
 
-    const result = await query.limit(limit).offset(offset).execute();
+    // const result = await query.limit(limit).offset(offset).execute();
 
-    const formattedResult = await Promise.all(
-      result.map(async (api) => {
-        const mongoApi = await Api.findOne({ api_id: api.api_id });
-        return {
-          ...api,
-          created_at: new Date(api.created_at).toISOString(),
-          parameters: mongoApi?.parameters || null,
-          allowedFilters: mongoApi?.allowedFilters || null,
-          responses: mongoApi?.responses || null,
-          middleware_config: mongoApi?.middleware_config || null,
-        };
-      })
-    );
-
+    // const formattedResult = await Promise.all(
+    //   result.map(async (api) => {
+    //     const mongoApi = await Api.findOne({ api_id: api.api_id });
+    //     return {
+    //       ...api,
+    //       created_at: new Date(api.created_at).toISOString(),
+    //       parameters: mongoApi?.parameters || null,
+    //       allowedFilters: mongoApi?.allowedFilters || null,
+    //       responses: mongoApi?.responses || null,
+    //       middleware_config: mongoApi?.middleware_config || null,
+    //     };
+    //   })
+    // );
+    const formattedResult = await Api.find({ project_id: project_id });
     end({ operation: "get_apis", success: "true" });
     return formattedResult;
   } catch (error) {

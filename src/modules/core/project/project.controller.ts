@@ -104,14 +104,20 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { project_name, project_description, db_type, db_creds } =
-          req.body;
+        const {
+          project_name,
+          project_description,
+          db_type,
+          db_instance_type,
+          db_creds,
+        } = req.body;
         const response = await createProject({
           project_name,
           project_description,
           user_id: req.user.user_id,
           isDeleted: false,
           db_type,
+          db_instance_type,
           db_creds, // Pass db_creds
         });
         return reply.code(StatusCodes.CREATED).send(response);

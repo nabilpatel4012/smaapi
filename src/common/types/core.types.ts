@@ -2,6 +2,7 @@ export interface IProjectBody {
   project_name: string;
   project_description?: string | null;
   db_type: "PG" | "MQL" | "MNGDB" | "SQLTE";
+  db_instance_type: "SMAAPI_GEN" | "CUSTOM";
   db_creds: object; // Flexible object for credentials
 }
 
@@ -11,6 +12,7 @@ export interface IProjectReply {
   project_name: string;
   project_description?: string | null;
   db_type: string;
+  db_instance_type: string;
   subdomain_url: string | null;
   created_at: Date | string;
 }
@@ -19,6 +21,7 @@ export interface IProjectUpdateBody {
   project_name?: string;
   project_description?: string;
   db_type?: string;
+  db_instance_type?: string;
 }
 
 export interface IProjectQueryParams {

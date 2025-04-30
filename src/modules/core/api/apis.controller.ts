@@ -95,7 +95,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
           "This endpoint returns a list of APIs for a specific project, with support for pagination and filtering.",
         querystring: apiQuerySchema,
         response: {
-          200: apisResponseSchema,
+          // 200: apisResponseSchema,
           400: errorResponseSchema,
           500: errorResponseSchema,
         },

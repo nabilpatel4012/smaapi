@@ -12,6 +12,52 @@ import { IProjectReply } from "../../../common/types/core.types";
 import { encrypt, decrypt } from "../../../utils/crypto";
 import { generateSubdomain } from "../../../utils/subdomain";
 import { cloudflareService } from "./cloudflare";
+import {
+  getCache,
+  setCache,
+  invalidateCache,
+  invalidateCacheByPattern,
+  getOrSetCache,
+} from "../../../utils/cache.utils";
+
+// Cache TTL constants
+const PROJECT_CACHE_TTL = 600; // 10 minutes
+const PROJECT_LIST_CACHE_TTL = 300; // 5 minutes
+const PROJECT_DB_CREDS_CACHE_TTL = 3600; // 1 hour
+
+/**
+ * Generates a cache key for a project
+ *
+ * @param projectId - The ID of the project
+ * @param userId - The ID of the user
+ * @param suffix - Optional suffix for the cache key
+ * @returns A string representing the cache key
+ */
+function generateProjectCacheKey(
+  projectId: number,
+  userId: number,
+  suffix?: string
+): string {
+  return `project:${userId}:${projectId}${suffix ? `:${suffix}` : ""}`;
+}
+
+/**
+ * Generates a cache key for a project list
+ *
+ * @param userId - The ID of the user
+ * @param filter - Optional filter parameters for the cache key
+ * @returns A string representing the cache key
+ */
+function generateProjectListCacheKey(
+  userId: number,
+  filter?: { name?: string; offset?: number; limit?: number }
+): string {
+  const nameFilter = filter?.name ? `:name:${filter.name}` : "";
+  const paginationFilter = `:offset:${filter?.offset || 0}:limit:${
+    filter?.limit || 10
+  }`;
+  return `projects:${userId}${nameFilter}${paginationFilter}`;
+}
 
 /**
  * Creates a new project in the database.
@@ -91,6 +137,19 @@ export async function createProject(
     });
 
     end({ operation: "create_project", success: "true" });
+
+    // Cache the new project
+    if (result) {
+      const cacheKey = generateProjectCacheKey(
+        result.project_id,
+        result.user_id
+      );
+      await setCache(cacheKey, result, PROJECT_CACHE_TTL);
+
+      // Invalidate the project list cache as it's now outdated
+      await invalidateCacheByPattern(`projects:${result.user_id}*`);
+    }
+
     return result;
   } catch (error: any) {
     end({ operation: "create_project", success: "false" });
@@ -120,28 +179,40 @@ export async function getProjects(
   name?: string,
   select?: string[]
 ): Promise<IProjectReply[]> {
-  const end = databaseQueryTimeHistogram.startTimer();
-  try {
-    const query = db
-      .selectFrom("projects")
-      .where("project_name", "like", name ? `%${name}%` : "%")
-      .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false)
-      .limit(limit)
-      .offset(offset);
-    const result = await (select
-      ? query
-          .select(select as SelectExpression<Database, "projects">[])
-          .execute()
-      : query.selectAll().execute());
+  const cacheKey = generateProjectListCacheKey(user_id, {
+    name,
+    offset,
+    limit,
+  });
 
-    end({ operation: "get_projects", success: "true" });
-    return result;
-  } catch (error) {
-    end({ operation: "get_projects", success: "false" });
-    logger.error({ error }, "getProjects: failed to get projects");
-    throw error;
-  }
+  return getOrSetCache(
+    cacheKey,
+    async () => {
+      const end = databaseQueryTimeHistogram.startTimer();
+      try {
+        const query = db
+          .selectFrom("projects")
+          .where("project_name", "like", name ? `%${name}%` : "%")
+          .where("user_id", "=", user_id)
+          .where("isDeleted", "=", false)
+          .limit(limit)
+          .offset(offset);
+        const result = await (select
+          ? query
+              .select(select as SelectExpression<Database, "projects">[])
+              .execute()
+          : query.selectAll().execute());
+
+        end({ operation: "get_projects", success: "true" });
+        return result;
+      } catch (error) {
+        end({ operation: "get_projects", success: "false" });
+        logger.error({ error }, "getProjects: failed to get projects");
+        throw error;
+      }
+    },
+    PROJECT_LIST_CACHE_TTL
+  );
 }
 
 /**
@@ -156,31 +227,39 @@ export async function getProjectById(
   project_id: number,
   user_id: number
 ): Promise<IProjectReply> {
-  const end = databaseQueryTimeHistogram.startTimer();
-  try {
-    const result = await db
-      .selectFrom("projects")
-      .selectAll()
-      .where("project_id", "=", project_id)
-      .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false) // Only get non-deleted projects
-      .executeTakeFirst();
+  const cacheKey = generateProjectCacheKey(project_id, user_id);
 
-    // Check if any project was found
-    if (!result) {
-      end({ operation: "get_project_by_id", success: "false" });
-      throw new Error(
-        `Project with ID ${project_id} not found for user ${user_id}`
-      );
-    }
+  return getOrSetCache(
+    cacheKey,
+    async () => {
+      const end = databaseQueryTimeHistogram.startTimer();
+      try {
+        const result = await db
+          .selectFrom("projects")
+          .selectAll()
+          .where("project_id", "=", project_id)
+          .where("user_id", "=", user_id)
+          .where("isDeleted", "=", false) // Only get non-deleted projects
+          .executeTakeFirst();
 
-    end({ operation: "get_project_by_id", success: "true" });
-    return result;
-  } catch (error) {
-    end({ operation: "get_project_by_id", success: "false" });
-    logger.error({ error }, "getProjectById: failed to get project");
-    throw error;
-  }
+        // Check if any project was found
+        if (!result) {
+          end({ operation: "get_project_by_id", success: "false" });
+          throw new Error(
+            `Project with ID ${project_id} not found for user ${user_id}`
+          );
+        }
+
+        end({ operation: "get_project_by_id", success: "true" });
+        return result;
+      } catch (error) {
+        end({ operation: "get_project_by_id", success: "false" });
+        logger.error({ error }, "getProjectById: failed to get project");
+        throw error;
+      }
+    },
+    PROJECT_CACHE_TTL
+  );
 }
 
 /**
@@ -233,6 +312,13 @@ export async function updateProject(
       .executeTakeFirst();
 
     end({ operation: "update_project", success: "true" });
+
+    // Invalidate cache for this specific project
+    await invalidateCache(generateProjectCacheKey(project_id, user_id));
+
+    // Invalidate project list cache as it's now outdated
+    await invalidateCacheByPattern(`projects:${user_id}*`);
+
     return updatedProject || null;
   } catch (error: any) {
     end({ operation: "update_project", success: "false" });
@@ -301,6 +387,18 @@ export async function deleteProject(
     });
 
     end({ operation: "delete_project", success: "true" });
+
+    // Invalidate cache for this specific project
+    await invalidateCache(generateProjectCacheKey(project_id, user_id));
+
+    // Invalidate project db credentials cache
+    await invalidateCache(
+      generateProjectCacheKey(project_id, user_id, "db_creds")
+    );
+
+    // Invalidate project list cache as it's now outdated
+    await invalidateCacheByPattern(`projects:${user_id}*`);
+
     return result;
   } catch (error) {
     end({ operation: "delete_project", success: "false" });
@@ -336,6 +434,14 @@ export async function hardDeleteProject(
       operation: "hard_delete_project",
       success: success ? "true" : "false",
     });
+
+    // Invalidate all cache entries for this project
+    await invalidateCache(generateProjectCacheKey(project_id, user_id));
+    await invalidateCache(
+      generateProjectCacheKey(project_id, user_id, "db_creds")
+    );
+    await invalidateCacheByPattern(`projects:${user_id}*`);
+
     return success;
   } catch (error) {
     end({ operation: "hard_delete_project", success: "false" });
@@ -351,31 +457,39 @@ export async function getProjectDbCreds(
   project_id: number,
   user_id: number
 ): Promise<object> {
-  const end = databaseQueryTimeHistogram.startTimer();
-  try {
-    // Fetch project_dbs entry
-    const projectDb = await db
-      .selectFrom("project_dbs")
-      .select(["db_creds"])
-      .where("project_id", "=", project_id)
-      .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false)
-      .executeTakeFirstOrThrow();
+  const cacheKey = generateProjectCacheKey(project_id, user_id, "db_creds");
 
-    // Fetch user password_hash
-    const user = await db
-      .selectFrom("users")
-      .select(["password_hash"])
-      .where("user_id", "=", user_id)
-      .executeTakeFirstOrThrow();
+  return getOrSetCache(
+    cacheKey,
+    async () => {
+      const end = databaseQueryTimeHistogram.startTimer();
+      try {
+        // Fetch project_dbs entry
+        const projectDb = await db
+          .selectFrom("project_dbs")
+          .select(["db_creds"])
+          .where("project_id", "=", project_id)
+          .where("user_id", "=", user_id)
+          .where("isDeleted", "=", false)
+          .executeTakeFirstOrThrow();
 
-    // Decrypt db_creds
-    const decryptedCreds = decrypt(projectDb.db_creds, user.password_hash);
-    end({ operation: "get_project_db_creds", success: "true" });
-    return JSON.parse(decryptedCreds);
-  } catch (error) {
-    end({ operation: "get_project_db_creds", success: "false" });
-    logger.error({ error }, "getProjectDbCreds: failed to get db creds");
-    throw error;
-  }
+        // Fetch user password_hash
+        const user = await db
+          .selectFrom("users")
+          .select(["password_hash"])
+          .where("user_id", "=", user_id)
+          .executeTakeFirstOrThrow();
+
+        // Decrypt db_creds
+        const decryptedCreds = decrypt(projectDb.db_creds, user.password_hash);
+        end({ operation: "get_project_db_creds", success: "true" });
+        return JSON.parse(decryptedCreds);
+      } catch (error) {
+        end({ operation: "get_project_db_creds", success: "false" });
+        logger.error({ error }, "getProjectDbCreds: failed to get db creds");
+        throw error;
+      }
+    },
+    PROJECT_DB_CREDS_CACHE_TTL
+  );
 }

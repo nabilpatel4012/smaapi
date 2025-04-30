@@ -21,6 +21,10 @@ export const userProjectUpdateSchema = {
       type: "string",
       enum: ["PG", "MQL", "MNGDB", "SQLTE"],
     },
+    db_instance_type: {
+      type: "string",
+      enum: ["SMAAPI_GEN", "CUSTOM"],
+    },
   },
 } as const;
 
@@ -103,6 +107,11 @@ export const userProjectBodySchema = {
       enum: ["PG", "MQL", "MNGDB", "SQLTE"],
       default: "PG",
     },
+    db_instance_type: {
+      type: "string",
+      enum: ["SMAAPI_GEN", "CUSTOM"],
+      default: "SMAAPI_GEN",
+    },
     db_creds: {
       type: "object",
       additionalProperties: true, // Allow any key-value pairs
@@ -121,6 +130,9 @@ export const userProjectResponseSchema = {
       description: "Project description (optional)",
     },
     db_type: {
+      type: "string",
+    },
+    db_instance_type: {
       type: "string",
     },
     subdomain_url: {
@@ -144,6 +156,9 @@ export const userProjectsResponseSchema = {
         description: "Project description (optional)",
       },
       db_type: {
+        type: "string",
+      },
+      db_instance_type: {
         type: "string",
       },
       subdomain_url: {
