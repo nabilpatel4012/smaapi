@@ -1,5 +1,4 @@
 import { FastifyPluginCallback } from "fastify";
-import { PostgresError } from "postgres";
 import { httpError } from "../../../utils/http";
 import { StatusCodes } from "http-status-codes";
 import {
@@ -41,7 +40,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
         response: {
           201: apiResponseSchema,
           400: errorResponseSchema,
-          409: errorResponseSchema, // Duplicate entry
+          409: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
@@ -51,7 +50,6 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
         const response = await createApi(req.body, req.user.user_id);
         return reply.code(StatusCodes.CREATED).send(response);
       } catch (e) {
-        // Handle validation errors
         if (e instanceof Error && !e.hasOwnProperty("code")) {
           return httpError({
             code: StatusCodes.BAD_REQUEST,
@@ -60,10 +58,8 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
             reply,
           });
         }
-
-        // Handle database-specific errors
-        const error = e as PostgresError;
-        if (error.code === "23505") {
+        const error = e as QueryError;
+        if (error.errno === 1062) {
           return httpError({
             code: StatusCodes.CONFLICT,
             message:
@@ -271,10 +267,10 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
-        const error = e as PostgresError;
+        const error = e as QueryError;
         logger.error({ error }, "updateApi: Error updating API");
 
-        if (error.code === "23505") {
+        if (error.errno === 1452) {
           return httpError({
             code: StatusCodes.CONFLICT,
             message:
@@ -342,7 +338,7 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
 
         return reply.code(StatusCodes.OK).send(deletedApi);
       } catch (e) {
-        const error = e as PostgresError;
+        const error = e as QueryError;
         logger.error({ error }, "deleteApi: Error deleting API");
 
         return httpError({

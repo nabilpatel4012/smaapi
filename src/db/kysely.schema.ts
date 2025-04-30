@@ -13,6 +13,8 @@ export interface Database {
   api_keys: ApiKeysTable;
   user_roles: UserRolesTable;
   projects: ProjectsTable;
+  projects_tables: ProjectsTablesTable;
+  project_dbs: ProjectDbsTable;
   project_members: ProjectMembersTable;
 }
 
@@ -73,6 +75,8 @@ export interface ProjectsTable {
   user_id: number;
   project_name: string;
   project_description: string | null;
+  db_type: string;
+  subdomain_url: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
   isDeleted: boolean;
 }
@@ -80,6 +84,32 @@ export interface ProjectsTable {
 export type Project = Selectable<ProjectsTable>;
 export type NewProject = Insertable<ProjectsTable>;
 export type ProjectUpdate = Updateable<ProjectsTable>;
+
+export interface ProjectsTablesTable {
+  table_id: Generated<number>;
+  project_id: number;
+  table_name: string;
+  table_schema: string;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  isDeleted: boolean;
+}
+
+export type SelectProjectsTables = Selectable<ProjectsTablesTable>;
+export type NewProjectsTable = Insertable<ProjectsTablesTable>;
+export type ProjectsTableUpdate = Updateable<ProjectsTablesTable>;
+
+export interface ProjectDbsTable {
+  project_db_id: Generated<number>;
+  project_id: number;
+  user_id: number;
+  db_creds: string; // Encrypted database credentials
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  isDeleted: boolean;
+}
+
+export type ProjectDb = Selectable<ProjectDbsTable>;
+export type NewProjectDb = Insertable<ProjectDbsTable>;
+export type ProjectDbUpdate = Updateable<ProjectDbsTable>;
 
 export interface ProjectMembersTable {
   project_member_id: Generated<number>;

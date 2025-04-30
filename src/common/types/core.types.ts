@@ -1,11 +1,24 @@
 export interface IProjectBody {
   project_name: string;
-  project_description?: string;
+  project_description?: string | null;
+  db_type: "PG" | "MQL" | "MNGDB" | "SQLTE";
+  db_creds: object; // Flexible object for credentials
+}
+
+export interface IProjectReply {
+  project_id: number;
+  user_id: number;
+  project_name: string;
+  project_description?: string | null;
+  db_type: string;
+  subdomain_url: string | null;
+  created_at: Date | string;
 }
 
 export interface IProjectUpdateBody {
   project_name?: string;
   project_description?: string;
+  db_type?: string;
 }
 
 export interface IProjectQueryParams {
@@ -14,13 +27,14 @@ export interface IProjectQueryParams {
   name?: string;
 }
 
-export interface IProjectReply {
-  project_id: number;
-  user_id: number;
-  project_name: string;
-  project_description?: string | null;
-  created_at: Date | string;
-}
+// export interface IProjectReply {
+//   project_id: number;
+//   user_id: number;
+//   project_name: string;
+//   project_description?: string | null;
+//   db_type: string;
+//   created_at: Date | string;
+// }
 
 export interface IAPIsBody {
   project_id: number;
@@ -66,4 +80,29 @@ export interface PropertyDefinition {
   items?: PropertyDefinition; // For array types
   required?: string[]; // Only for object types
   properties?: Record<string, PropertyDefinition>; // Nested object validation
+}
+
+export interface IProjectTableReply {
+  table_id: number; // Auto-incrementing integer
+  project_id: number;
+  table_name: string;
+  table_schema: any;
+  created_at: Date | string;
+  isDeleted: boolean;
+}
+
+export interface IProjectTableBody {
+  table_name: string;
+  table_schema: any;
+}
+
+export interface IProjectTableUpdateBody {
+  table_name?: string;
+  table_schema?: any;
+}
+
+export interface IProjectTableQueryParams {
+  page?: number;
+  size?: number;
+  name?: string;
 }

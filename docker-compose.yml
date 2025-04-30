@@ -6,7 +6,11 @@ services:
       dockerfile: Dockerfile
     depends_on:
       db:
-        condition: service_healthy # Wait for MySQL to be fully ready
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      valkey:
+        condition: service_started
     ports:
       - "4000:4000"
     env_file: .env
@@ -17,66 +21,46 @@ services:
       retries: 5
       start_period: 30s
 
-  # db:
-  #   container_name: db
-  #   image: mysql:8.4.4
-  #   ports:
-  #     - "3307:3306"
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-  #     - MYSQL_DATABASE=${DATABASE_NAME}
-  #     - MYSQL_USER=${DATABASE_USERNAME}
-  #     - MYSQL_PASSWORD=${DATABASE_PASSWORD}
-  #   healthcheck:
-  #     test:
-  #       [
-  #         "CMD",
-  #         "mysqladmin",
-  #         "ping",
-  #         "-h",
-  #         "localhost",
-  #         "-u",
-  #         "${DATABASE_USERNAME}",
-  #         "--password=${DATABASE_PASSWORD}",
-  #       ]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
   db:
     container_name: db
-    image: postgres:16-alpine
+    image: mysql:8.4.4
     ports:
-      - "5432:5432"
+      - "3307:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     env_file:
       - .env
     environment:
-      - POSTGRES_USER=${DATABASE_USERNAME}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRES_DB=${DATABASE_NAME}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DATABASE_NAME}
+      - MYSQL_USER=${DATABASE_USERNAME}
+      - MYSQL_PASSWORD=${DATABASE_PASSWORD}
     healthcheck:
       test:
-        ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}"]
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "${DATABASE_USERNAME}",
+          "--password=${DATABASE_PASSWORD}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   valkey:
     image: docker.io/valkey/valkey:8.0-alpine
     environment:
-      # ALLOW_EMPTY_PASSWORD is recommended only for development.
-      - ALLOW_EMPTY_PASSWORD=yes
+      - ALLOW_EMPTY_PASSWORD=yes # Use only for development
       - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
     ports:
       - "6379:6379"
     volumes:
-      - "valkey_data:/data"
+      - valkey_data:/data
 
   mongodb:
     image: mongo:7.0
@@ -91,7 +75,17 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
       - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
-    command: ["mongod", "--auth"] # Enforce authentication
+    command: ["mongod", "--auth"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username $${MONGO_ROOT_USERNAME} --password $${MONGO_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' | grep 1",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   dozzle:
     container_name: dozzle
@@ -130,14 +124,13 @@ services:
     volumes:
       - uptime_kuma_data:/app/data
     ports:
-      # <Host Port>:<Container Port>
       - 3003:3001
     restart: unless-stopped
 
 volumes:
   prom_data:
   grafana-storage:
-  postgres_data:
+  mysql_data:
   uptime_kuma_data:
   valkey_data:
     driver: local

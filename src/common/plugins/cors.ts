@@ -4,5 +4,6 @@ import { FastifyInstance } from "fastify";
 export async function registerCors(server: FastifyInstance) {
   await server.register(cors, {
     origin: true,
+    credentials: true,
   });
 }

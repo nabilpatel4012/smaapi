@@ -31,7 +31,6 @@ import {
 import { auth } from "../../common/helpers/authenticate";
 import cookie from "@fastify/cookie";
 import { verifyToken } from "../../utils/utils";
-import { PostgresError } from "postgres";
 
 export const usersController: FastifyPluginCallback = (server, _, done) => {
   /**
@@ -105,9 +104,9 @@ export const usersController: FastifyPluginCallback = (server, _, done) => {
 
         return reply.code(StatusCodes.CREATED).send(user);
       } catch (e) {
-        const error = e as PostgresError;
+        const error = e as QueryError;
 
-        if (error.code === "23505") {
+        if (error.errno === 1062) {
           return httpError({
             reply,
             message: "User already exists",

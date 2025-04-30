@@ -1,5 +1,4 @@
 import { Database } from "./kysely.schema";
-import { Pool } from "pg";
 import { Kysely, MysqlDialect, sql } from "kysely";
 import { config } from "../config";
 import "dotenv/config";

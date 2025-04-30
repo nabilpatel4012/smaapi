@@ -1,8 +1,7 @@
 import "dotenv/config";
-import { up, down } from "./migration"; // Import your migration functions
+import { up, down } from "./migration";
 import { db } from "./db";
 
-// Parse command-line arguments
 const [, , command] = process.argv;
 
 async function runMigration() {
@@ -23,7 +22,7 @@ async function runMigration() {
     console.error("Migration failed:", err);
     process.exit(1);
   } finally {
-    await db.destroy(); // Close the database connection
+    await db.destroy();
   }
 }
 

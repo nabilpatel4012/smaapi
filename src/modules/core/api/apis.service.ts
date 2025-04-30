@@ -171,13 +171,8 @@ export async function createApi(
     };
   } catch (error: any) {
     end({ operation: "create_api", success: "false" });
-    if (
-      error.errno === 1062 &&
-      error.sqlMessage.includes("unique_apis_project_path_method_user")
-    ) {
-      throw new Error(
-        "An API with this project, endpoint path, HTTP method, and user already exists"
-      );
+    if (error.errno === 1062) {
+      throw error;
     }
     logger.error({ error }, "createApi: failed to create API");
     throw error;
@@ -451,13 +446,8 @@ export async function updateApi(
     };
   } catch (error: any) {
     end({ operation: "update_api", success: "false" });
-    if (
-      error.errno === 1062 &&
-      error.sqlMessage.includes("unique_apis_project_path_method_user")
-    ) {
-      throw new Error(
-        "An API with this project, endpoint path, HTTP method, and user already exists"
-      );
+    if (error.errno === 1062) {
+      throw error;
     }
     logger.error({ error }, "updateApi: failed to update API");
     throw error;

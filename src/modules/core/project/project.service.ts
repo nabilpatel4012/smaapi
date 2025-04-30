@@ -2,8 +2,15 @@ import { Insertable, Updateable } from "kysely"; // Import Kysely types
 import { db } from "../../../db/db"; // Your Kysely instance
 import { databaseQueryTimeHistogram } from "../../../utils/metrics";
 import { logger } from "../../../utils/logger";
-import { ProjectsTable } from "../../../db/kysely.schema";
+import {
+  ProjectsTable,
+  ProjectDbsTable,
+  UsersTable,
+} from "../../../db/kysely.schema";
 import { IProjectReply } from "../../../common/types/core.types";
+import { encrypt, decrypt } from "../../../utils/crypto";
+import { generateSubdomain } from "../../../utils/subdomain";
+import { cloudflareService } from "./cloudflare";
 
 /**
  * Creates a new project in the database.
@@ -15,40 +22,80 @@ import { IProjectReply } from "../../../common/types/core.types";
  * @throws An error if the database operation fails.
  */
 export async function createProject(
-  values: Insertable<ProjectsTable>
+  values: Insertable<ProjectsTable> & { db_creds: object } // Add db_creds to input
 ): Promise<IProjectReply> {
   const end = databaseQueryTimeHistogram.startTimer();
+  const { db_creds, ...projectValues } = values;
+
   try {
-    // Create a new payload with isDeleted set to false
-    const payload: Insertable<ProjectsTable> = {
-      ...values,
-      isDeleted: false,
-    };
-    // Insert the project
-    const result = await db
-      .insertInto("projects")
-      .values(payload)
-      .executeTakeFirstOrThrow();
+    // Start a transaction
+    const result = await db.transaction().execute(async (trx) => {
+      // Fetch user to get password_hash for encryption
+      const user = await trx
+        .selectFrom("users")
+        .select(["password_hash"])
+        .where("user_id", "=", projectValues.user_id)
+        .executeTakeFirstOrThrow();
 
-    // Get the inserted ID
-    const insertId = Number(result.insertId);
-
-    // Fetch the newly created project
-    const createdProject = await db
-      .selectFrom("projects")
-      .selectAll()
-      .where("project_id", "=", insertId)
-      .executeTakeFirst();
-
-    if (!createdProject) {
-      throw new Error(
-        `Failed to retrieve the newly created project with ID ${insertId}`
+      // Encrypt db_creds
+      const encryptedCreds = encrypt(
+        JSON.stringify(db_creds),
+        user.password_hash
       );
-    }
+
+      // Insert the project
+      const projectPayload: Insertable<ProjectsTable> = {
+        ...projectValues,
+        isDeleted: false,
+      };
+      const projectResult = await trx
+        .insertInto("projects")
+        .values(projectPayload)
+        .executeTakeFirstOrThrow();
+
+      const projectId = Number(projectResult.insertId);
+
+      // Generate subdomain
+      const subdomain = generateSubdomain(
+        projectValues.user_id,
+        projectId,
+        Date.now()
+      );
+      const subdomainUrl = await cloudflareService.createSubdomain(subdomain);
+
+      // Update project with subdomain_url
+      await trx
+        .updateTable("projects")
+        .set({ subdomain_url: subdomainUrl })
+        .where("project_id", "=", projectId)
+        .execute();
+
+      // Insert into project_dbs
+      const projectDbPayload: Insertable<ProjectDbsTable> = {
+        project_id: projectId,
+        user_id: projectValues.user_id,
+        db_creds: encryptedCreds,
+        isDeleted: false,
+      };
+      await trx.insertInto("project_dbs").values(projectDbPayload).execute();
+
+      // Fetch the newly created project
+      const createdProject = await trx
+        .selectFrom("projects")
+        .selectAll()
+        .where("project_id", "=", projectId)
+        .executeTakeFirstOrThrow();
+
+      return createdProject;
+    });
+
     end({ operation: "create_project", success: "true" });
-    return createdProject; // Fixed: Return createdProject instead of createProject
-  } catch (error) {
+    return result;
+  } catch (error: any) {
     end({ operation: "create_project", success: "false" });
+    if (error.errno === 1062) {
+      throw error;
+    }
     logger.error({ error }, "createProject: failed to create project");
     throw error;
   }
@@ -76,9 +123,9 @@ export async function getProjects(
     const result = await db
       .selectFrom("projects")
       .selectAll()
-      .where("project_name", "like", name ? `%${name}%` : "%") // Changed ilike to like for MySQL
+      .where("project_name", "like", name ? `%${name}%` : "%")
       .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false) // Only get non-deleted projects
+      .where("isDeleted", "=", false)
       .limit(limit)
       .offset(offset)
       .execute();
@@ -182,8 +229,11 @@ export async function updateProject(
 
     end({ operation: "update_project", success: "true" });
     return updatedProject || null;
-  } catch (error) {
+  } catch (error: any) {
     end({ operation: "update_project", success: "false" });
+    if (error.errno === 1062) {
+      throw error;
+    }
     logger.error({ error }, "updateProject: failed to update project");
     throw error;
   }
@@ -204,30 +254,49 @@ export async function deleteProject(
 ): Promise<IProjectReply | null> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
-    // First fetch the project to be deleted
-    const projectToDelete = await db
-      .selectFrom("projects")
-      .selectAll()
-      .where("project_id", "=", project_id)
-      .where("user_id", "=", user_id)
-      .where("isDeleted", "=", false)
-      .executeTakeFirst();
+    // Start a transaction
+    const result = await db.transaction().execute(async (trx) => {
+      // Fetch the project to be deleted
+      const projectToDelete = await trx
+        .selectFrom("projects")
+        .selectAll()
+        .where("project_id", "=", project_id)
+        .where("user_id", "=", user_id)
+        .where("isDeleted", "=", false)
+        .executeTakeFirst();
 
-    if (!projectToDelete) {
-      end({ operation: "delete_project", success: "false" });
-      return null; // Project not found
-    }
+      if (!projectToDelete) {
+        return null; // Project not found
+      }
 
-    // Soft delete by setting isDeleted to true
-    await db
-      .updateTable("projects")
-      .set({ isDeleted: true })
-      .where("project_id", "=", project_id)
-      .where("user_id", "=", user_id)
-      .execute();
+      // Delete Cloudflare DNS record
+      if (projectToDelete.subdomain_url) {
+        const subdomain = projectToDelete.subdomain_url.split(".")[0];
+        // await cloudflareService.deleteSubdomain(subdomain);
+        console.log("deleting domain");
+      }
+
+      // Soft delete project
+      await trx
+        .updateTable("projects")
+        .set({ isDeleted: true })
+        .where("project_id", "=", project_id)
+        .where("user_id", "=", user_id)
+        .execute();
+
+      // Soft delete project_dbs entry
+      await trx
+        .updateTable("project_dbs")
+        .set({ isDeleted: true })
+        .where("project_id", "=", project_id)
+        .where("user_id", "=", user_id)
+        .execute();
+
+      return projectToDelete;
+    });
 
     end({ operation: "delete_project", success: "true" });
-    return projectToDelete; // Return the project data that was deleted
+    return result;
   } catch (error) {
     end({ operation: "delete_project", success: "false" });
     logger.error({ error }, "deleteProject: failed to delete project");
@@ -269,6 +338,39 @@ export async function hardDeleteProject(
       { error },
       "hardDeleteProject: failed to permanently delete project"
     );
+    throw error;
+  }
+}
+
+export async function getProjectDbCreds(
+  project_id: number,
+  user_id: number
+): Promise<object> {
+  const end = databaseQueryTimeHistogram.startTimer();
+  try {
+    // Fetch project_dbs entry
+    const projectDb = await db
+      .selectFrom("project_dbs")
+      .select(["db_creds"])
+      .where("project_id", "=", project_id)
+      .where("user_id", "=", user_id)
+      .where("isDeleted", "=", false)
+      .executeTakeFirstOrThrow();
+
+    // Fetch user password_hash
+    const user = await db
+      .selectFrom("users")
+      .select(["password_hash"])
+      .where("user_id", "=", user_id)
+      .executeTakeFirstOrThrow();
+
+    // Decrypt db_creds
+    const decryptedCreds = decrypt(projectDb.db_creds, user.password_hash);
+    end({ operation: "get_project_db_creds", success: "true" });
+    return JSON.parse(decryptedCreds);
+  } catch (error) {
+    end({ operation: "get_project_db_creds", success: "false" });
+    logger.error({ error }, "getProjectDbCreds: failed to get db creds");
     throw error;
   }
 }

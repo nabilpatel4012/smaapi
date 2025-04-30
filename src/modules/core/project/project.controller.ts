@@ -5,6 +5,7 @@ import {
   createProject,
   deleteProject,
   getProjectById,
+  getProjectDbCreds,
   getProjects,
   updateProject,
 } from "./project.service";
@@ -15,6 +16,7 @@ import {
   IProjectUpdateBody,
 } from "../../../common/types/core.types";
 import {
+  projectDBCredsQuerySchema,
   userProjectBodySchema,
   userProjectQuerySchema,
   userProjectResponseSchema,
@@ -26,8 +28,62 @@ import { auth } from "../../../common/helpers/authenticate";
 import { IErrorReply, IIdParams } from "../../../common/types/generic.types";
 import { QueryError } from "mysql2";
 import { logger } from "../../../utils/logger";
+import {
+  getUserById,
+  getUserPasswordHashById,
+  verifyPassword,
+} from "../../user/user.service";
 
 export const projectController: FastifyPluginCallback = (server, _, done) => {
+  // server.post<{ Body: IProjectBody; Reply: IProjectReply }>(
+  //   "/",
+  //   {
+  //     ...auth(server),
+  //     schema: {
+  //       tags: ["Projects", "Core"],
+  //       summary: "Create a new project",
+  //       description:
+  //         "This endpoint creates a new project for the authenticated user.",
+  //       body: userProjectBodySchema,
+  //       response: {
+  //         201: userProjectResponseSchema,
+  //         400: errorResponseSchema,
+  //         409: errorResponseSchema, // Duplicate entry
+  //         500: errorResponseSchema,
+  //       },
+  //     },
+  //   },
+  //   async (req, reply) => {
+  //     try {
+  //       const { project_name, project_description, db_type } = req.body;
+  //       const response = await createProject({
+  //         project_name,
+  //         project_description,
+  //         user_id: req.user.user_id,
+  //         isDeleted: false,
+  //         db_type: db_type,
+  //       });
+  //       return reply.code(StatusCodes.CREATED).send(response);
+  //     } catch (e) {
+  //       const error = e as QueryError;
+  //       if (error.errno === 1062) {
+  //         return httpError({
+  //           code: StatusCodes.CONFLICT,
+  //           message: "Project name already exists",
+  //           cause: "You have entered a name which already exists",
+  //           reply,
+  //         });
+  //       }
+  //       logger.error({ error }, "createProject: Error creating project");
+  //       return httpError({
+  //         code: StatusCodes.INTERNAL_SERVER_ERROR,
+  //         message: "Internal Server Error",
+  //         reply,
+  //       });
+  //     }
+  //   }
+  // );
+
   server.post<{ Body: IProjectBody; Reply: IProjectReply }>(
     "/",
     {
@@ -41,28 +97,31 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
         response: {
           201: userProjectResponseSchema,
           400: errorResponseSchema,
-          409: errorResponseSchema, // Duplicate entry
+          409: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
     },
     async (req, reply) => {
       try {
-        const { project_name, project_description } = req.body;
+        const { project_name, project_description, db_type, db_creds } =
+          req.body;
         const response = await createProject({
           project_name,
           project_description,
           user_id: req.user.user_id,
           isDeleted: false,
+          db_type,
+          db_creds, // Pass db_creds
         });
         return reply.code(StatusCodes.CREATED).send(response);
       } catch (e) {
         const error = e as QueryError;
-        if (error.code === "ER_DUP_ENTRY") {
+        if (error.errno === 1062) {
           return httpError({
             code: StatusCodes.CONFLICT,
-            message: "Project name already exists",
-            cause: "You have entered a name which already exists",
+            message: "Project name or subdomain already exists",
+            cause: "You have entered a name or subdomain which already exists",
             reply,
           });
         }
@@ -253,6 +312,18 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
         return reply.code(StatusCodes.OK).send(updatedProject);
       } catch (e) {
         logger.error({ error: e }, "updateProject: Error updating project");
+        const error = e as QueryError;
+        logger.error({ error }, "updateApi: Error updating project");
+
+        if (error.errno === 1452) {
+          return httpError({
+            code: StatusCodes.CONFLICT,
+            message: "Project already exists (Duplicate project)",
+            cause:
+              "A project with this name already exists, please use different name",
+            reply,
+          });
+        }
         return httpError({
           reply,
           message: "Error updating project",
@@ -319,6 +390,75 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
           message: "Error deleting project",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
           cause: e instanceof Error ? e.message : "Unknown error",
+        });
+      }
+    }
+  );
+
+  server.get<{
+    Querystring: { project_id: number; password: string };
+    Reply: any;
+  }>(
+    "/creds",
+    {
+      ...auth(server),
+      schema: {
+        tags: ["Projects", "Core"],
+        summary: "Get list of APIs",
+        description:
+          "This endpoint returns a list of APIs for a specific project, with support for pagination and filtering.",
+        querystring: projectDBCredsQuerySchema,
+        response: {
+          400: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const { project_id, password } = req.query;
+        const projectIdNumber = Number(project_id);
+
+        if (isNaN(projectIdNumber) || projectIdNumber < 1) {
+          return httpError({
+            code: StatusCodes.BAD_REQUEST,
+            message: "Invalid query parameters",
+            cause: "project_id must be positive numbers",
+            reply,
+          });
+        }
+
+        const user = await getUserPasswordHashById(req.user.user_id);
+        if (user) {
+          const passWordVerifcation = await verifyPassword({
+            candidatePassword: password,
+            hashedPassword: user.password_hash,
+          });
+          if (passWordVerifcation) {
+            const response = await getProjectDbCreds(
+              project_id,
+              req.user.user_id
+            );
+            return reply
+              .code(StatusCodes.OK)
+              .send({ project_id: project_id, ...response });
+          } else {
+            return httpError({
+              code: StatusCodes.BAD_REQUEST,
+              message: "Operation not allowed",
+              cause: "Please check project number or password",
+              reply,
+            });
+          }
+        }
+        // return reply.code(StatusCodes.OK).send(response);
+      } catch (e) {
+        logger.error({ error: e }, "getApis: Error fetching APIs");
+
+        return httpError({
+          code: StatusCodes.INTERNAL_SERVER_ERROR,
+          message: "Internal Server Error",
+          reply,
         });
       }
     }

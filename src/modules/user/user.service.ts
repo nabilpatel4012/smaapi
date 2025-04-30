@@ -15,20 +15,16 @@ export async function createUser(
   const end = databaseQueryTimeHistogram.startTimer();
   try {
     const hashedPassword = await argon2.hash(values.password_hash);
-
     const payload: Insertable<UsersTable> = {
       ...values,
       email: values.email.toLowerCase(),
       password_hash: hashedPassword,
     };
-
     const insertResult = await db
       .insertInto("users")
       .values(payload)
       .executeTakeFirst();
-
     const insertedId = Number(insertResult.insertId);
-
     const result = await db
       .selectFrom("users")
       .select([
@@ -51,12 +47,14 @@ export async function createUser(
       ])
       .where("user_id", "=", insertedId)
       .executeTakeFirst();
-
     end({ operation: "create_user", success: "true" });
     return result!;
-  } catch (error) {
+  } catch (error: any) {
     end({ operation: "create_user", success: "false" });
-    logger.error({ error }, "createUser: failed to create user");
+    logger.error(
+      { error: error.sqlMessage },
+      "createUser: failed to create user"
+    );
     throw error;
   }
 }
@@ -89,13 +87,10 @@ export async function getUserById(userId: number) {
         "is_verified",
       ])
       .execute();
-
     end({ operation: "get_user_by_id", success: "true" });
-
     return result[0];
   } catch (error) {
     end({ operation: "get_user_by_id", success: "false" });
-
     logger.error({ error, userId }, "getUserById: failed to get user");
     throw error;
   }
@@ -117,13 +112,10 @@ export async function findUserByEmail({ email }: { email: string }): Promise<{
       .select(["user_id", "username", "email", "password_hash"])
       .where("email", "=", email)
       .execute();
-
     end({ operation: "find_user_by_email", success: "true" });
-
     return { ...result[0] };
   } catch (error) {
     end({ operation: "find_user_by_email", success: "false" });
-
     logger.error({ error, email }, "findUserByEmail: failed to find user");
     throw error;
   }
@@ -311,4 +303,13 @@ export async function invalidateUserSession(user_id: number) {
     .set({ is_valid: false })
     .where("user_id", "=", user_id)
     .execute();
+}
+
+export async function getUserPasswordHashById(user_id: number) {
+  const userPass = await db
+    .selectFrom("users")
+    .where("user_id", "=", user_id)
+    .select(["user_id", "password_hash"])
+    .executeTakeFirst();
+  return userPass;
 }
