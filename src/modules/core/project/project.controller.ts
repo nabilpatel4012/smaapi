@@ -157,7 +157,7 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { page = 1, size = 10, name } = req.query;
+        const { page = 1, size = 10, name, select } = req.query;
         const pageNumber = Number(page);
         const sizeNumber = Number(size);
 
@@ -174,12 +174,72 @@ export const projectController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
+        // Parse select query parameter
+        let selectArray: string[] | undefined;
+        if (select) {
+          try {
+            if (typeof select === "string") {
+              // Handle comma-separated string or JSON string
+              if (
+                select.trim().startsWith("[") &&
+                select.trim().endsWith("]")
+              ) {
+                selectArray = JSON.parse(select);
+              } else {
+                selectArray = select.split(",").map((s) => s.trim());
+              }
+            } else if (Array.isArray(select)) {
+              selectArray = select.map((s) => s.toString().trim());
+            }
+
+            // Validate that selectArray is an array of strings
+            if (
+              !selectArray ||
+              !Array.isArray(selectArray) ||
+              !selectArray.every((s) => typeof s === "string")
+            ) {
+              return httpError({
+                reply,
+                message:
+                  "Invalid select parameter: must be an array of strings",
+                code: StatusCodes.BAD_REQUEST,
+              });
+            }
+
+            // Optional: Validate column names
+            const validColumns = [
+              "project_id",
+              "user_id",
+              "project_name",
+              "project_description",
+              "db_type",
+              "created_at",
+              "updated_at",
+              "isDeleted",
+            ];
+            if (!selectArray.every((col) => validColumns.includes(col))) {
+              return httpError({
+                reply,
+                message: "Invalid column names in select parameter",
+                code: StatusCodes.BAD_REQUEST,
+              });
+            }
+          } catch (e) {
+            return httpError({
+              reply,
+              message: "Invalid select parameter format",
+              code: StatusCodes.BAD_REQUEST,
+            });
+          }
+        }
+
         const offset = (pageNumber - 1) * sizeNumber;
         const response = await getProjects(
           offset,
           sizeNumber,
           req.user.user_id,
-          name
+          name,
+          selectArray
         );
         return reply.code(StatusCodes.OK).send(response);
       } catch (e) {

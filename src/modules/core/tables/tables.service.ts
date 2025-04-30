@@ -77,8 +77,8 @@ export async function createTable(
 export async function getTables(
   offset: number = 0,
   limit: number = 10,
-  project_id: number,
   user_id: number,
+  project_id?: number,
   name?: string
 ): Promise<IProjectTableReply[]> {
   const end = databaseQueryTimeHistogram.startTimer();
@@ -92,10 +92,14 @@ export async function getTables(
         "projects_tables.project_id"
       )
       .selectAll("projects_tables")
-      .where("projects_tables.project_id", "=", project_id)
       .where("projects.user_id", "=", user_id)
       .where("projects_tables.isDeleted", "=", false)
       .where("projects.isDeleted", "=", false);
+
+    // Add project_id filter if provided
+    if (project_id !== undefined) {
+      query = query.where("projects_tables.project_id", "=", project_id);
+    }
 
     // Add name filter if provided
     if (name) {
@@ -124,12 +128,20 @@ export async function getTables(
  */
 export async function getTableById(
   table_id: number,
-  project_id: number,
-  user_id: number
+  user_id: number,
+  project_id?: number
 ): Promise<IProjectTableReply> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
-    const result = await db
+    // Validate inputs
+    if (isNaN(table_id) || table_id <= 0) {
+      throw new Error("Invalid table ID");
+    }
+    if (isNaN(user_id) || user_id <= 0) {
+      throw new Error("Invalid user ID");
+    }
+
+    let query = db
       .selectFrom("projects_tables")
       .innerJoin(
         "projects",
@@ -138,15 +150,25 @@ export async function getTableById(
       )
       .selectAll("projects_tables")
       .where("projects_tables.table_id", "=", table_id)
-      .where("projects_tables.project_id", "=", project_id)
       .where("projects.user_id", "=", user_id)
       .where("projects_tables.isDeleted", "=", false)
-      .where("projects.isDeleted", "=", false)
-      .executeTakeFirst();
+      .where("projects.isDeleted", "=", false);
+
+    // Conditionally add project_id filter if provided
+    if (project_id !== undefined) {
+      if (isNaN(project_id) || project_id <= 0) {
+        throw new Error("Invalid project ID");
+      }
+      query = query.where("projects_tables.project_id", "=", project_id);
+    }
+
+    const result = await query.executeTakeFirst();
 
     if (!result) {
       throw new Error(
-        `Table with ID ${table_id} not found for project ${project_id}`
+        `Table with ID ${table_id} not found${
+          project_id !== undefined ? ` for project ${project_id}` : ""
+        }`
       );
     }
 
@@ -154,7 +176,10 @@ export async function getTableById(
     return result;
   } catch (error) {
     end({ operation: "get_table_by_id", success: "false" });
-    logger.error({ error }, "getTableById: failed to get table");
+    logger.error(
+      { error, table_id, user_id, project_id },
+      "getTableById: failed to get table"
+    );
     throw error;
   }
 }

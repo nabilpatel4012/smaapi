@@ -114,25 +114,17 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
   );
 
   server.get<{
-    Params: { project_id: string };
     Querystring: IProjectTableQueryParams;
     Reply: IProjectTableReply[] | IErrorReply;
   }>(
-    "/:project_id/tables",
+    "/tables",
     {
       ...auth(server),
       schema: {
         tags: ["Tables", "Core"],
         summary: "Get list of tables",
         description:
-          "This endpoint returns a list of tables for the specified project, with support for pagination and filtering.",
-        params: {
-          type: "object",
-          properties: {
-            project_id: { type: "string", description: "Project ID" },
-          },
-          required: ["project_id"],
-        },
+          "This endpoint returns a list of tables for the specified project (if provided) or all projects for the user, with support for pagination and filtering.",
         querystring: projectTableQuerySchema,
         response: {
           200: projectTablesResponseSchema,
@@ -143,19 +135,11 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
     },
     async (req, reply) => {
       try {
-        const { project_id } = req.params;
-        const { page = 1, size = 10, name } = req.query;
+        const { page = 1, size = 10, name, project_id } = req.query;
         const pageNumber = Number(page);
         const sizeNumber = Number(size);
 
-        if (!project_id || isNaN(Number(project_id))) {
-          return httpError({
-            reply,
-            message: "Invalid project ID",
-            code: StatusCodes.BAD_REQUEST,
-          });
-        }
-
+        // Validate pagination parameters
         if (
           isNaN(pageNumber) ||
           isNaN(sizeNumber) ||
@@ -169,12 +153,21 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
+        // Validate project_id if provided
+        if (project_id !== undefined && isNaN(Number(project_id))) {
+          return httpError({
+            reply,
+            message: "Invalid project ID",
+            code: StatusCodes.BAD_REQUEST,
+          });
+        }
+
         const offset = (pageNumber - 1) * sizeNumber;
         const response = await getTables(
           offset,
           sizeNumber,
-          Number(project_id),
           req.user.user_id,
+          project_id !== undefined ? Number(project_id) : undefined,
           name
         );
         return reply.code(StatusCodes.OK).send(response);
@@ -190,10 +183,11 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
   );
 
   server.get<{
-    Params: { project_id: string; id: string };
+    Params: { id: string };
+    Querystring: { project_id?: string }; // Make project_id optional
     Reply: IProjectTableReply | IErrorReply;
   }>(
-    "/:project_id/tables/:id",
+    "/tables/:id",
     {
       ...auth(server),
       schema: {
@@ -203,29 +197,31 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
         params: {
           type: "object",
           properties: {
-            project_id: { type: "string", description: "Project ID" },
             id: { type: "string", description: "Table ID" },
           },
-          required: ["project_id", "id"],
+          required: ["id"],
+        },
+        querystring: {
+          type: "object",
+          properties: {
+            project_id: { type: "string", description: "Project ID" },
+          },
         },
         response: {
           200: projectTableResponseSchema,
           400: errorResponseSchema,
+          401: errorResponseSchema, // Add for unauthorized
           404: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
     },
     async (req, reply) => {
-      const { project_id, id } = req.params;
+      const { id } = req.params as { id: string };
+      const { project_id } = req.query as { project_id?: string };
+
       try {
-        if (!project_id || isNaN(Number(project_id))) {
-          return httpError({
-            reply,
-            message: "Invalid project ID",
-            code: StatusCodes.BAD_REQUEST,
-          });
-        }
+        // Validate table_id
         if (!id || isNaN(Number(id))) {
           return httpError({
             reply,
@@ -234,11 +230,34 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
           });
         }
 
+        // Validate user_id from authentication
+        if (!req.user?.user_id || isNaN(Number(req.user.user_id))) {
+          return httpError({
+            reply,
+            message: "Unauthorized: Invalid user ID",
+            code: StatusCodes.UNAUTHORIZED,
+          });
+        }
+
+        // Validate project_id if provided
+        let projectIdNumber: number | undefined;
+        if (project_id !== undefined && project_id !== "") {
+          projectIdNumber = Number(project_id);
+          if (isNaN(projectIdNumber)) {
+            return httpError({
+              reply,
+              message: "Invalid project ID",
+              code: StatusCodes.BAD_REQUEST,
+            });
+          }
+        }
+
         const result = await getTableById(
-          Number(id),
-          Number(project_id),
-          req.user.user_id
+          Number(id), // table_id
+          Number(req.user.user_id), // user_id
+          projectIdNumber // project_id (undefined if not provided)
         );
+
         return reply.code(StatusCodes.OK).send(result);
       } catch (e) {
         if (e instanceof Error && e.message.includes("not found")) {

@@ -1,3 +1,5 @@
+import { nullable, optional } from "zod";
+
 export const projectTableBodySchema = {
   type: "object",
   required: ["table_name", "table_schema"],
@@ -29,6 +31,7 @@ export const projectTableQuerySchema = {
     name: {
       type: "string",
     },
+    project_id: { type: "number", nullable: true },
   },
 } as const;
 

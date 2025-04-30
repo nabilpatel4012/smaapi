@@ -32,6 +32,16 @@ export const userProjectQuerySchema = {
     name: {
       type: "string",
     },
+    select: {
+      anyOf: [
+        { type: "string", nullable: true },
+        {
+          type: "array",
+          items: { type: "string" },
+          nullable: true,
+        },
+      ],
+    },
   },
 } as const;
 

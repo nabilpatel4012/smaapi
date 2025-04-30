@@ -25,6 +25,7 @@ export interface IProjectQueryParams {
   page?: number;
   size?: number;
   name?: string;
+  select?: string | string[] | undefined;
 }
 
 // export interface IProjectReply {
@@ -105,4 +106,5 @@ export interface IProjectTableQueryParams {
   page?: number;
   size?: number;
   name?: string;
+  project_id?: number;
 }

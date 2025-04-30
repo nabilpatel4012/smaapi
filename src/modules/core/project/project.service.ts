@@ -1,4 +1,4 @@
-import { Insertable, Updateable } from "kysely"; // Import Kysely types
+import { Insertable, SelectExpression, Updateable } from "kysely"; // Import Kysely types
 import { db } from "../../../db/db"; // Your Kysely instance
 import { databaseQueryTimeHistogram } from "../../../utils/metrics";
 import { logger } from "../../../utils/logger";
@@ -6,6 +6,7 @@ import {
   ProjectsTable,
   ProjectDbsTable,
   UsersTable,
+  Database,
 } from "../../../db/kysely.schema";
 import { IProjectReply } from "../../../common/types/core.types";
 import { encrypt, decrypt } from "../../../utils/crypto";
@@ -116,19 +117,23 @@ export async function getProjects(
   offset: number = 0,
   limit: number = 10,
   user_id: number,
-  name?: string
+  name?: string,
+  select?: string[]
 ): Promise<IProjectReply[]> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
-    const result = await db
+    const query = db
       .selectFrom("projects")
-      .selectAll()
       .where("project_name", "like", name ? `%${name}%` : "%")
       .where("user_id", "=", user_id)
       .where("isDeleted", "=", false)
       .limit(limit)
-      .offset(offset)
-      .execute();
+      .offset(offset);
+    const result = await (select
+      ? query
+          .select(select as SelectExpression<Database, "projects">[])
+          .execute()
+      : query.selectAll().execute());
 
     end({ operation: "get_projects", success: "true" });
     return result;

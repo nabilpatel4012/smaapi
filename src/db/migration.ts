@@ -58,6 +58,9 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("project_name", "varchar(255)", (col) => col.notNull())
     .addColumn("project_description", "text")
     .addColumn("db_type", "varchar(15)", (col) => col.notNull().defaultTo("PG"))
+    .addColumn("db_instance_type", "varchar(15)", (col) =>
+      col.notNull().defaultTo("SMAAPI_GEN")
+    )
     .addColumn("created_at", "timestamp", (col) =>
       col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
     )
