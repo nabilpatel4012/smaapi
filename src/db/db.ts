@@ -22,8 +22,12 @@ const dialect = new MysqlDialect({
 export const valkey = new Redis({
   host: config.VALKEY_HOST,
   port: config.VALKEY_PORT,
+  password: config.VALKEY_PASSWORD,
   commandTimeout: 5000,
   lazyConnect: true,
+  tls: {
+    allowPartialTrustChain: true,
+  },
 });
 
 export const db = new Kysely<Database>({

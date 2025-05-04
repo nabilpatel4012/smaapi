@@ -19,5 +19,6 @@ export const config = {
   DRAGONFLY_PASSWORD: process.env.DRAGONFLY_PASSWORD,
   VALKEY_HOST: process.env.VALKEY_HOST,
   VALKEY_PORT: Number(process.env.VALKEY_PORT),
+  VALKEY_PASSWORD: process.env.VALKEY_PASSWORD,
   MONGO_URI: process.env.MONGO_URI || "",
 };
