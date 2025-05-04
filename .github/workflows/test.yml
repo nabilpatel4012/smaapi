@@ -26,7 +26,7 @@ jobs:
           version: 9
           run_install: true
 
-    deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,4 +42,3 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             echo "GitHub Action connected successfully" > ~/text.txt
           EOF
-
