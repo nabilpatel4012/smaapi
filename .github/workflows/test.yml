@@ -26,22 +26,20 @@ jobs:
           version: 9
           run_install: true
 
-  deploy:
+    deploy:
     runs-on: ubuntu-latest
-    needs: [lint]
-    environment: DEV_ENV
 
     steps:
-      - name: Set up SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          printf "%s\n" "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: SSH and create text.txt
+      - name: SSH test
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            cd ~
-            echo "This is a test file created by GitHub Actions." > text.txt
+            echo "GitHub Action connected successfully" > ~/text.txt
           EOF
+
