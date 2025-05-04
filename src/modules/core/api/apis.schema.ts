@@ -175,7 +175,6 @@ export const apiQuerySchema = {
     project_id: { type: "number", description: "Project ID to filter APIs" },
     name: { type: "string", description: "Filter APIs by name" },
   },
-  required: ["project_id"],
 } as const;
 
 export const apisResponseSchema = {

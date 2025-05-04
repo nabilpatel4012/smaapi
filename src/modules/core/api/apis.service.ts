@@ -224,12 +224,55 @@ export async function getApis(
     //     };
     //   })
     // );
+
     const formattedResult = await Api.find({ project_id: project_id });
     end({ operation: "get_apis", success: "true" });
     return formattedResult;
   } catch (error) {
     end({ operation: "get_apis", success: "false" });
     logger.error({ error }, "getApis: failed to get APIs");
+    throw error;
+  }
+}
+
+export async function getAPIStats(user_id: number): Promise<any> {
+  const end = databaseQueryTimeHistogram.startTimer();
+  try {
+    const result = await Api.aggregate([
+      { $match: { user_id: user_id } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          draft: {
+            $sum: {
+              $cond: [{ $eq: ["$api_status", "draft"] }, 1, 0],
+            },
+          },
+          active: {
+            $sum: {
+              $cond: [{ $eq: ["$api_status", "active"] }, 1, 0],
+            },
+          },
+          inactive: {
+            $sum: {
+              $cond: [{ $eq: ["$api_status", "inactive"] }, 1, 0],
+            },
+          },
+          suspended: {
+            $sum: {
+              $cond: [{ $eq: ["$api_status", "suspended"] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    end({ operation: "get_api_stats", success: "true" });
+    return result;
+  } catch (error) {
+    end({ operation: "get_api_stats", success: "false" });
+    logger.error({ error }, "getApiStats: failed to get API stats");
     throw error;
   }
 }
@@ -244,32 +287,32 @@ export async function getApis(
 export async function getApiById(
   api_id: number,
   user_id: number
-): Promise<IApiReply> {
+): Promise<any> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
     const result = await db
       .selectFrom("apis")
-      .selectAll()
+      .select(["api_name"])
       .where("api_id", "=", api_id)
       .where("user_id", "=", user_id)
       .where("isDeleted", "=", false)
       .executeTakeFirst();
-
-    if (!result) {
+    if (result) {
+      const mongoApi = await Api.findOne({ api_id: api_id });
+      end({ operation: "get_api_by_id", success: "true" });
+      return mongoApi;
+    } else {
       throw new Error(`API with ID ${api_id} not found for user ${user_id}`);
     }
 
-    const mongoApi = await Api.findOne({ api_id: api_id });
-
-    end({ operation: "get_api_by_id", success: "true" });
-    return {
-      ...result,
-      created_at: new Date(result.created_at).toISOString(),
-      parameters: mongoApi?.parameters || null,
-      allowedFilters: mongoApi?.allowedFilters || null,
-      responses: mongoApi?.responses || null,
-      middleware_config: mongoApi?.middleware_config || null,
-    };
+    // return {
+    //   ...result,
+    //   created_at: new Date(result.created_at).toISOString(),
+    //   parameters: mongoApi?.parameters || null,
+    //   allowedFilters: mongoApi?.allowedFilters || null,
+    //   responses: mongoApi?.responses || null,
+    //   middleware_config: mongoApi?.middleware_config || null,
+    // };
   } catch (error) {
     end({ operation: "get_api_by_id", success: "false" });
     logger.error({ error }, "getApiById: failed to get API");

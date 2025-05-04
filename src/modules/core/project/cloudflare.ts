@@ -27,7 +27,7 @@ export class CloudflareService {
         name: fullDomain,
         content: this.config.targetIp,
         ttl: 3600,
-        proxied: false,
+        proxied: true,
       });
       logger.info(
         { subdomain: fullDomain },

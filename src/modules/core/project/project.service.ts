@@ -360,6 +360,7 @@ export async function deleteProject(
         return null; // Project not found
       }
 
+      // TODO: Add the delete logic (You have to first set the record id while adding the domain record, the pass it here for deleting.)
       // Delete Cloudflare DNS record
       if (projectToDelete.subdomain_url) {
         const subdomain = projectToDelete.subdomain_url.split(".")[0];

@@ -6,6 +6,7 @@ import {
   deleteApi,
   getApiById,
   getApis,
+  getAPIStats,
   updateApi,
 } from "./apis.service";
 import {
@@ -346,6 +347,40 @@ export const apiController: FastifyPluginCallback = (server, _, done) => {
           message: "Error deleting API",
           code: StatusCodes.INTERNAL_SERVER_ERROR,
           cause: error.message,
+        });
+      }
+    }
+  );
+
+  server.get<{ Reply: any }>(
+    "/stats",
+    {
+      ...auth(server),
+      schema: {
+        tags: ["APIs", "Core"],
+        summary: "Get all API stats (API count, API status counts)",
+        description:
+          "This endpoint returns an API stats for the authenticated user.",
+        response: {
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const result = await getAPIStats(req.user.user_id);
+        return reply
+          .code(StatusCodes.OK)
+          .send(...result, (result._id = req.user.user_id));
+      } catch (e) {
+        logger.error({ error: e }, "getApiStats: Error fetching API stats");
+        return httpError({
+          reply,
+          message: "Error fetching API stats",
+          code: StatusCodes.INTERNAL_SERVER_ERROR,
+          cause: e instanceof Error ? e.message : "Unknown error",
         });
       }
     }
