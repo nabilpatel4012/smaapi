@@ -59,7 +59,7 @@ jobs:
 
       - name: SSH and create text.txt
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             cd ~
             echo "This is a test file created by GitHub Actions." > text.txt
           EOF
