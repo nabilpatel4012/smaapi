@@ -28,17 +28,28 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    environment: DEV_ENV
 
     steps:
-      - name: Setup SSH
+      - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           printf "%s\n" "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+          echo "First line of key:"
+          head -n 1 ~/.ssh/id_ed25519
+
+          echo "Last line of key:"
+          tail -n 1 ~/.ssh/id_ed25519
+
+          echo "Key line count (should be ~30-40):"
+          wc -l ~/.ssh/id_ed25519
+
+      - name: Add known hosts
+        run: |
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: SSH test
+      - name: Test SSH connection
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            echo "GitHub Action connected successfully" > ~/text.txt
-          EOF
+          ssh -vvv -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} exit
