@@ -50,13 +50,19 @@ function generateProjectCacheKey(
  */
 function generateProjectListCacheKey(
   userId: number,
-  filter?: { name?: string; offset?: number; limit?: number }
+  filter?: { name?: string; offset?: number; limit?: number; select?: string[] }
 ): string {
   const nameFilter = filter?.name ? `:name:${filter.name}` : "";
   const paginationFilter = `:offset:${filter?.offset || 0}:limit:${
     filter?.limit || 10
   }`;
-  return `projects:${userId}${nameFilter}${paginationFilter}`;
+
+  // Add select fields to cache key to ensure different selected fields create different cache keys
+  const selectFilter = filter?.select?.length
+    ? `:select:${filter.select.sort().join(",")}`
+    : `:select:all`;
+
+  return `projects:${userId}${nameFilter}${paginationFilter}${selectFilter}`;
 }
 
 /**
@@ -183,6 +189,7 @@ export async function getProjects(
     name,
     offset,
     limit,
+    select, // Include the select fields in the cache key
   });
 
   return getOrSetCache(
