@@ -163,13 +163,14 @@ export const tableController: FastifyPluginCallback = (server, _, done) => {
         }
 
         const offset = (pageNumber - 1) * sizeNumber;
-        const response = await getTables(
-          offset,
-          sizeNumber,
-          req.user.user_id,
-          project_id !== undefined ? Number(project_id) : undefined,
-          name
-        );
+        const filters = {
+          limit: sizeNumber,
+          offset: offset,
+          ...(project_id !== undefined && { project_id: Number(project_id) }),
+          ...(name && { name }),
+        };
+
+        const response = await getTables(req.user.user_id, filters);
         return reply.code(StatusCodes.OK).send(response);
       } catch (e) {
         logger.error({ error: e }, "getTables: Error fetching tables");

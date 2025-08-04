@@ -63,26 +63,55 @@ export async function createTable(
 }
 
 /**
- * Retrieves a list of tables from the database, with optional pagination and filtering by name.
+ * Interface for table filtering options - only these specific filters are allowed
+ */
+interface GetTablesFilters {
+  readonly project_id?: number;
+  readonly name?: string;
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+/**
+ * Enhanced function to retrieve a list of tables from the database with flexible filtering options.
  *
- * @param offset - The number of tables to skip from the beginning (for pagination). Defaults to 0.
- * @param limit - The maximum number of tables to retrieve. Defaults to 10.
- * @param project_id - The ID of the project to filter tables by.
  * @param user_id - The ID of the user to ensure tables belong to their projects.
- * @param name - An optional string to filter tables by name (case-insensitive). If provided, only tables whose
- *               name contains the given string will be returned.
+ * @param filters - Optional filters object containing:
+ *   - project_id: Filter tables by project ID
+ *   - name: Filter tables by name (case-insensitive partial match)
+ *   - limit: Maximum number of tables to retrieve (defaults to 10)
+ *   - offset: Number of tables to skip for pagination (defaults to 0)
  * @returns A Promise that resolves to an array of table data, each conforming to IProjectTableReply, or an empty array if no tables match the criteria.
  * @throws An error if the database operation fails.
  */
 export async function getTables(
-  offset: number = 0,
-  limit: number = 10,
   user_id: number,
-  project_id?: number,
-  name?: string
+  filters: GetTablesFilters = {}
 ): Promise<IProjectTableReply[]> {
   const end = databaseQueryTimeHistogram.startTimer();
   try {
+    // Validate that only allowed filter keys are provided
+    const allowedKeys: (keyof GetTablesFilters)[] = [
+      "project_id",
+      "name",
+      "limit",
+      "offset",
+    ];
+    const providedKeys = Object.keys(filters) as (keyof GetTablesFilters)[];
+    const invalidKeys = providedKeys.filter(
+      (key) => !allowedKeys.includes(key)
+    );
+
+    if (invalidKeys.length > 0) {
+      throw new Error(
+        `Invalid filter keys provided: ${invalidKeys.join(
+          ", "
+        )}. Allowed filters are: ${allowedKeys.join(", ")}`
+      );
+    }
+
+    const { project_id, name, limit = 10, offset = 0 } = filters;
+
     // Build the query to fetch tables
     let query = db
       .selectFrom("projects_tables")
@@ -113,6 +142,124 @@ export async function getTables(
   } catch (error) {
     end({ operation: "get_tables", success: "false" });
     logger.error({ error }, "getTables: failed to get tables");
+    throw error;
+  }
+}
+
+/**
+ * Legacy version of getTables for backward compatibility.
+ * @deprecated Use getTables with filters object instead
+ */
+export async function getTablesLegacy(
+  offset: number = 0,
+  limit: number = 10,
+  user_id: number,
+  project_id?: number,
+  name?: string
+): Promise<IProjectTableReply[]> {
+  return getTables(user_id, { offset, limit, project_id, name });
+}
+
+/**
+ * Interface for getTablesByProjectId options - only these specific options are allowed
+ */
+interface GetTablesByProjectIdOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly name?: string;
+}
+
+/**
+ * Retrieves all tables that belong to a specific project.
+ *
+ * @param project_id - The ID of the project to get tables for.
+ * @param user_id - The ID of the user to ensure the project belongs to them.
+ * @param options - Optional parameters (only limit, offset, and name are allowed):
+ *   - limit: Maximum number of tables to retrieve (defaults to 50)
+ *   - offset: Number of tables to skip for pagination (defaults to 0)
+ *   - name: Filter tables by name (case-insensitive partial match)
+ * @returns A Promise that resolves to an array of table data for the specified project.
+ * @throws An error if the database operation fails or if the project doesn't exist/belong to the user.
+ */
+export async function getTablesByProjectId(
+  project_id: number,
+  user_id: number,
+  options: GetTablesByProjectIdOptions = {}
+): Promise<IProjectTableReply[]> {
+  const end = databaseQueryTimeHistogram.startTimer();
+  try {
+    // Validate that only allowed option keys are provided
+    const allowedKeys: (keyof GetTablesByProjectIdOptions)[] = [
+      "limit",
+      "offset",
+      "name",
+    ];
+    const providedKeys = Object.keys(
+      options
+    ) as (keyof GetTablesByProjectIdOptions)[];
+    const invalidKeys = providedKeys.filter(
+      (key) => !allowedKeys.includes(key)
+    );
+
+    if (invalidKeys.length > 0) {
+      throw new Error(
+        `Invalid option keys provided: ${invalidKeys.join(
+          ", "
+        )}. Allowed options are: ${allowedKeys.join(", ")}`
+      );
+    }
+
+    const { limit = 50, offset = 0, name } = options;
+
+    // Validate inputs
+    if (isNaN(project_id) || project_id <= 0) {
+      throw new Error("Invalid project ID");
+    }
+    if (isNaN(user_id) || user_id <= 0) {
+      throw new Error("Invalid user ID");
+    }
+
+    // First verify the project exists and belongs to the user
+    const projectExists = await db
+      .selectFrom("projects")
+      .select("project_id")
+      .where("project_id", "=", project_id)
+      .where("user_id", "=", user_id)
+      .where("isDeleted", "=", false)
+      .executeTakeFirst();
+
+    if (!projectExists) {
+      throw new Error(
+        `Project with ID ${project_id} not found or does not belong to user ${user_id}`
+      );
+    }
+
+    // Build the query to fetch tables for the specific project
+    let query = db
+      .selectFrom("projects_tables")
+      .selectAll()
+      .where("project_id", "=", project_id)
+      .where("isDeleted", "=", false);
+
+    // Add name filter if provided
+    if (name) {
+      query = query.where("table_name", "like", `%${name}%`);
+    }
+
+    const result = await query
+      .orderBy("table_id", "desc") // Order by newest first
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    end({ operation: "get_tables_by_project_id", success: "true" });
+    return result;
+  } catch (error) {
+    end({ operation: "get_tables_by_project_id", success: "false" });
+    logger.error(
+      { error, project_id, user_id },
+      "getTablesByProjectId: failed to get tables by project ID"
+    );
     throw error;
   }
 }
